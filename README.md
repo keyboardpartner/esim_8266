@@ -1,5 +1,7 @@
 # ESIM Eprom Simulator Uploader
 
+![PCB Pic](https://github.com/keyboardpartner/esim_8266/tree/main/docs/esim_esp_reversed.jpg)
+
 ### ESP8266 Project for PlatformIO or Arduino IDE
 
 ESP8266 used as an upload tool for old ESIM EPROM Simulator from c't 9/1991 instead of obsolete Centronix port. Outputs stream of data to 74HC595 shift register. Pulls /STROBE low on each byte sent.
