@@ -71,7 +71,7 @@ namespace {
 constexpr const char *kApSsid = "ESIM Uploader";
 constexpr const char *kApPassword = "0000";
 constexpr const char *kStaSsid = "KeyboardPartner";
-constexpr const char *kStaPassword = "z28hev111";
+constexpr const char *kStaPassword = "your PW";
 
 constexpr uint32_t strobeDelayMicros = 5;
 constexpr size_t kStreamBatchBytes = 16;
