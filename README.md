@@ -1,6 +1,6 @@
 # ESIM Eprom Simulator Uploader
 
-![PCB Pic](https://github.com/keyboardpartner/esim_8266/tree/main/docs/esim_esp_reversed.jpg)
+![PCB Pic](https://github.com/keyboardpartner/esim_8266/blob/main/docs/esim_esp_reversed.jpg)
 
 ### ESP8266 Project for PlatformIO or Arduino IDE
 
