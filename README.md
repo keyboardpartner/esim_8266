@@ -25,3 +25,5 @@ Centronix Sub-D-25 for IBM PC, box pin header, 26 pins
 | 21 | (11) | GND (BUSY) | 22 | (24) | GND     |
 | 23 | (12) | nc         | 24 | (25) | GND     |
 | 25 | (13) | VCC-Host   | 26 | (-)  | VCC-Host |
+
+Sub-D-25 pins in brackets
