@@ -579,7 +579,7 @@ String buildPage(const String &message = String()) {
   page += F("<style>");
   page += F("body{font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:24px;}");
   page += F(".card{width:780px;max-width:calc(100vw - 48px);margin:0 auto;background:#111827;border:1px solid #334155;border-radius:16px;padding:24px;box-shadow:0 20px 50px rgba(0,0,0,.25);box-sizing:border-box;}h1{margin-top:0;font-size:28px;}p,li{line-height:1.5;}label{display:block;margin:16px 0 8px;}input[type=file]{display:block;width:100%;padding:12px;background:#0b1220;border:1px solid #334155;color:#e2e8f0;border-radius:10px;}button{margin-top:16px;background:#22c55e;border:0;color:#052e16;font-weight:700;padding:12px 18px;border-radius:10px;cursor:pointer;}button[disabled]{opacity:.65;cursor:not-allowed;}.mini{margin-top:0;padding:4px 8px;font-size:12px;}code{background:#0b1220;padding:2px 6px;border-radius:6px;}.muted{color:#94a3b8;}.messages{min-height:72px;margin:16px 0;display:flex;flex-direction:column;justify-content:flex-start;}.msg{margin:0;padding:12px 14px;background:#0b1220;border-left:4px solid #38bdf8;border-radius:8px;}.msg.wait{border-left-color:#f59e0b;}.msg.ok{border-left-color:#22c55e;}</style></head><body><div class='card'>");
-  page += F("<h1>ESIM Binary Uploader</h1>");
+  page += F("<h1>ESIM Binary Uploader</h1><h3>by Carsten Meyer 7/2026</h3>");
 
   page += F("<form id='uploadForm' method='POST' action='/upload' enctype='multipart/form-data'>");
   page += F("<label for='binfile'>Binary file</label><input id='binfile' name='binfile' type='file' accept='.bin,application/octet-stream' required>");
