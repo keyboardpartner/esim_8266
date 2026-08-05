@@ -1,14 +1,18 @@
-# ESIM EPROM Simulator Uploader
-
-![PCB Pic](https://github.com/keyboardpartner/esim_8266/blob/main/docs/esim_esp_reversed.jpg)
+# EPROM Simulator Uploader
 
 ### ESP8266 Project for PlatformIO or Arduino IDE
 
-ESP8266 used as an upload tool for old ESIM EPROM Simulator from c't 9/1991 instead of obsolete Centronix port. Outputs stream of data to 74HC595 shift register. Pulls /STROBE low on each byte sent.
+![PCB Pic](https://github.com/keyboardpartner/esim_8266/blob/main/docs/esim_esp_reversed.jpg)
+
+Three versions available through #defines:
+
+### ESIM Support
+
+ESP8266 used as an upload tool for old ESIM EPROM Simulator from c't magazine, issue 9/1991 instead of obsolete Centronix port. Outputs stream of data to 74HC595 shift register. Pulls /STROBE low on each byte sent. Supports 2764 up tp 27512 EPROMs. Unfortunately, ESIM does not support setting a start address; uploads will always start at EPROM address 0x0000.
 
 #### Pinout ESIM
 
-Centronix Sub-D-25 for IBM PC, box pin header, 26 pins
+Centronix Sub-D-25 for IBM PC, box pin header, 26 pins. Sub-D-25 pins in brackets
 
 | PFS-26 Pin | Sub-D-25 Pin | Signal     | PFS-26 Pin | Sub-D-25 Pin | Signal   |
 | --- | --- | --- | --- | --- | --- |
@@ -26,4 +30,22 @@ Centronix Sub-D-25 for IBM PC, box pin header, 26 pins
 | 23 | (12) | nc         | 24 | (25) | GND     |
 | 25 | (13) | VCC-Host   | 26 | (-)  | VCC-Host |
 
-Sub-D-25 pins in brackets
+
+
+### CONITEC PEPS Support
+
+New: now supports even older PEPS EPROM Simulator from c't 5/1985, page 85. This design uses a special serial transmission; due to the protocol's nature, the byte output routine uses slower bit-banging instead of SPI. EPROM size is limited to 27128 (16 KBytes). Find the old article in /docs folder.
+
+### GODIL FPGA Support
+
+I made a versatile EPROM simulator using the legacy GODIL 40 from [OHO electronic](https://www.oho-elektronik.de/). See my other repositories. These are legacy FPGA modules sold by [Trenz electronic](https://www.trenz-electronic.de/de), but you may still find them on the web. Supports EPROMs up to 27256 (32 KByte). 
+
+This version has a nice feature: It can be used as RAM emulator for 6264 or 62256 SRAMs; in this case, you may read back the RAM contents from host system. Used it to recover old programs from my very first computer, an Acorn ATOM from 1981.
+
+### OHO DY1 Support
+
+All modules support the OHO DY1 display, a 3-digit 7-segment LED module with SPI connection, handy for displaying short messages, IP numbers etc. You may omit the DY1 display and use serial monitoring instead (to get your IP number and to set password/SSID).
+
+### PCBs
+
+For each version, I designed a one-layer PCB optimized for milling. Can be handled by JCLPCB, though. See /pcb folder.
