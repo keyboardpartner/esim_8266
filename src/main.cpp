@@ -26,7 +26,7 @@
 // 74HC595 SER (DS) to MOSI (GPIO13 / D7), SRCLK (SH_CP) to SCLK (GPIO14 / D5).
 // RCLK (ST_CP latch) uses GPIO 5 (D1). Tie /OE low and /SRCLR high for always-enabled output.
 
-// Serial commands: r=replay staged file, c=cancel streaming, i=print info,
+// Serial commands: e=erase EPROM, r=replay staged file, c=cancel streaming, i=print info,
 // n=next serial upload filename terminated by CR,
 // u=lenLo,lenHi,data... upload payload by serial (LE length, timeout-protected),
 // d=filename,start,len<CR> dumps EPROM bytes to LittleFS.
@@ -61,7 +61,9 @@
 #define DEBUG
 
 // uncomment to use GODIL SPI Dual Port mode and DY1 Display
-#define GODIL_SPI
+#define ESIM_SPI
+// #define GODIL_SPI
+// #define PEPS_SPI
 #define USE_DY1_DISPLAY
 
 // uncomment to use Web Server
@@ -77,24 +79,42 @@
   #define DBG_PRINTLN0() do {} while (0)
 #endif
 
-#define LED_SENDDATA 4
-#define LATCH_PIN 15 // 74HC595 RCLK (ST_CP) latch pin or FPGA SPI /SS
 
 #ifdef GODIL_SPI
+  #define LED_SENDDATA 4
   #define LED_UPLOAD 5
   constexpr const char *kApSsid = "GODIL Uploader";
-#else
+  constexpr uint32_t maxBytesToTransfer = 32768; // 32KB for GODIL RAM
+#endif
+
+#ifdef ESIM_SPI
+  #define LATCH_PIN 15 // 74HC595 RCLK (ST_CP) latch pin or FPGA SPI /SS
   #define STROBE_PIN 5
+  #define LED_SENDDATA 4
   #define LED_UPLOAD 2 // LED_BUILTIN on ESP8266 boards
   constexpr const char *kApSsid = "ESIM Uploader";
+  constexpr uint32_t maxBytesToTransfer = 65536;
 #endif
+
+#ifdef PEPS_SPI
+  #define LED_SENDDATA 15
+  #define LED_UPLOAD 15
+  #define LATCH_CLK 14 // SCLK für 4094
+  #define M0_PIN 5
+  #define M1_PIN 4
+  #define STROBE_PIN 5
+  #define DATA_PIN 13
+  #define DATA_INVERT // bei invertierendem Bustreiber
+  constexpr const char *kApSsid = "PEPS Uploader";
+  constexpr uint32_t maxBytesToTransfer = 16384; // 16KB for PEPS RAM
+#endif
+
 constexpr const char *kApPassword = "0000";
 constexpr const char *kStaSsid = "KeyboardPartner";
 constexpr const char *kStaPassword = "z28hev111";
 
 constexpr uint32_t strobeDelayMicros = 5;
 constexpr size_t kMaxFsPathLength = 31;
-constexpr uint32_t maxBytesToTransfer = 65536;
 constexpr uint32_t kSerialUploadTimeoutMs = 200;
 constexpr uint8_t kSerialAckByte = 0x06;
 constexpr uint8_t kSerialNakByte = 0x15;
@@ -303,162 +323,295 @@ void setUpSendLed(bool on) {
 
 
 #ifdef GODIL_SPI
-
-// Clears all output bits on the shift register.
-void clearDataBus() {
-
-}
-
-uint32_t spi_xfer32_ss(uint32_t data) {
-  uint32_t rxlong;
-  digitalWrite(LATCH_PIN, LOW);
-  rxlong  = SPI.transfer16(data >> 16) << 16;
-  rxlong |= SPI.transfer16(data & 0xFFFF);
-  digitalWrite(LATCH_PIN, HIGH);
-  return rxlong;
-}
-
-// Sends one byte to device output
-void outputByte(uint8_t value, uint32_t addr) {
-  uint32_t txlong = (addr << 8) | value;
-  // Shifts one byte to the 74HC595 using SPI and latches the new output state.
-  digitalWrite(LATCH_PIN, LOW);
-  SPI.write32(txlong | 0x80000000); // write command and address to write
-  digitalWrite(LATCH_PIN, HIGH);
-}
-
-// receives one byte from device
-uint8_t inputByte(uint32_t addr) {
-  uint32_t txlong = (addr << 8);
-  digitalWrite(LATCH_PIN, LOW);
-  SPI.write32(txlong); // set address to read from internal register
-  digitalWrite(LATCH_PIN, HIGH);
-  uint32_t rxlong = spi_xfer32_ss(0) & 0xFF; // read back data from internal register
-  return static_cast<uint8_t>(rxlong);
-}
-
-// Reads bytes from the slave device and stores them into a LittleFS file.
-bool writeEPROMtoFile(String filename, uint32_t start_addr, uint16_t len) {
-  if (!fsMounted) {
-    Serial.println(F("ERROR: filesystem not mounted."));
-    return false;
+  // Clears all output bits on the shift register.
+  void clearDataBus() {
   }
 
-  filename.trim();
-  if (filename.length() == 0) {
-    Serial.println(F("ERROR: empty filename."));
-    return false;
+  void startBlockTransfer(uint32_t startAddr) { 
+  }
+  void stopBlockTransfer() { 
   }
 
-  if (filename[0] != '/') {
-    filename = String('/') + filename;
+  uint32_t spi_xfer32_ss(uint32_t data) {
+    uint32_t rxlong;
+    digitalWrite(LATCH_PIN, LOW);
+    rxlong  = SPI.transfer16(data >> 16) << 16;
+    rxlong |= SPI.transfer16(data & 0xFFFF);
+    digitalWrite(LATCH_PIN, HIGH);
+    return rxlong;
   }
 
-  if (filename.indexOf("..") >= 0) {
-    Serial.println(F("ERROR: invalid filename."));
-    return false;
+  // Sends one byte to device output
+  void outputByte(uint8_t value, uint32_t addr) {
+    uint32_t txlong = (addr << 8) | value;
+    // Shifts one byte to the 74HC595 using SPI and latches the new output state.
+    digitalWrite(LATCH_PIN, LOW);
+    SPI.write32(txlong | 0x80000000); // write command and address to write
+    digitalWrite(LATCH_PIN, HIGH);
   }
 
-  if (filename.length() > kMaxFsPathLength) {
-    Serial.println(F("ERROR: filename too long."));
-    return false;
+  // receives one byte from device
+  uint8_t inputByte(uint32_t addr) {
+    uint32_t txlong = (addr << 8);
+    digitalWrite(LATCH_PIN, LOW);
+    SPI.write32(txlong); // set address to read from internal register
+    digitalWrite(LATCH_PIN, HIGH);
+    uint32_t rxlong = spi_xfer32_ss(0) & 0xFF; // read back data from internal register
+    return static_cast<uint8_t>(rxlong);
   }
 
-  if (len == 0) {
-    Serial.println(F("ERROR: len must be > 0."));
-    return false;
-  }
-
-  LittleFS.remove(filename);
-  File outFile = LittleFS.open(filename, "w");
-  if (!outFile) {
-    Serial.print(F("ERROR: cannot open file for writing: "));
-    Serial.println(filename);
-    return false;
-  }
-
-  for (uint32_t i = 0; i < len; ++i) {
-    const uint8_t value = inputByte(start_addr + i);
-    if (outFile.write(&value, 1) != 1) {
-      outFile.close();
-      LittleFS.remove(filename);
-      Serial.print(F("ERROR: write failed at offset "));
-      Serial.println(i);
+  // Reads bytes from the slave device and stores them into a LittleFS file.
+  bool writeEPROMtoFile(String filename, uint32_t start_addr, uint16_t len) {
+    if (!fsMounted) {
+      Serial.println(F("ERROR: filesystem not mounted."));
       return false;
     }
 
-    if ((i & 0x1F) == 0) {
-      delay(0);
+    filename.trim();
+    if (filename.length() == 0) {
+      Serial.println(F("ERROR: empty filename."));
+      return false;
+    }
+
+    if (filename[0] != '/') {
+      filename = String('/') + filename;
+    }
+
+    if (filename.indexOf("..") >= 0) {
+      Serial.println(F("ERROR: invalid filename."));
+      return false;
+    }
+
+    if (filename.length() > kMaxFsPathLength) {
+      Serial.println(F("ERROR: filename too long."));
+      return false;
+    }
+
+    if (len == 0) {
+      Serial.println(F("ERROR: len must be > 0."));
+      return false;
+    }
+
+    LittleFS.remove(filename);
+    File outFile = LittleFS.open(filename, "w");
+    if (!outFile) {
+      Serial.print(F("ERROR: cannot open file for writing: "));
+      Serial.println(filename);
+      return false;
+    }
+
+    for (uint32_t i = 0; i < len; ++i) {
+      const uint8_t value = inputByte(start_addr + i);
+      if (outFile.write(&value, 1) != 1) {
+        outFile.close();
+        LittleFS.remove(filename);
+        Serial.print(F("ERROR: write failed at offset "));
+        Serial.println(i);
+        return false;
+      }
+
+      if ((i & 0x1F) == 0) {
+        delay(0); yield();
+      }
+    }
+
+    outFile.close();
+    Serial.print(F("EPROM dump saved to "));
+    Serial.print(filename);
+    Serial.print(F(", bytes="));
+    Serial.println(len);
+    return true;
+  }
+
+  void testSPItransfer() {
+    // Write test pattern to internal registers and read back to verify correctness.
+    Serial.println(F("Testing GODIL SPI transfer to RAM..."));
+    #ifdef USE_DY1_DISPLAY
+      set_static_message(F("tst"));
+    #endif
+    for (uint32_t i = 0; i < 0x0400; ++i) {
+      outputByte(1 << (i % 8), i); // DIL Tester LED Test pattern
+    }
+    uint32_t start_addr = 0x0400;
+    uint32_t multiplier = 19;
+    uint8_t vals_written[16];
+    for (uint32_t i = 0; i < 16; ++i) {
+      vals_written[i] = static_cast<uint8_t>(0xFF - i*11);
+      outputByte(vals_written[i], start_addr + i*multiplier);
+    }
+    for (uint32_t i = 0; i < 16; ++i) {
+      // read back data from internal register
+      Serial.print(F("Addr 0x"));
+      Serial.print(start_addr + i*multiplier, HEX);
+      Serial.print(F(", Written 0x"));
+      Serial.print(vals_written[i], HEX);
+      Serial.print(F(", Received 0x"));
+      Serial.println(inputByte(start_addr + i*multiplier), HEX);
+    }
+    Serial.println(F("Ready."));
+  }
+#endif
+
+#ifdef ESIM_SPI
+  // Clears all output bits on the shift register.
+  void clearDataBus() {
+    digitalWrite(STROBE_PIN, HIGH);
+    digitalWrite(LATCH_PIN, LOW);
+    SPI.transfer(0);
+    digitalWrite(LATCH_PIN, HIGH);
+  }
+
+  void startBlockTransfer(uint32_t startAddr) { 
+  }
+  void stopBlockTransfer() { 
+  }
+
+  // Pulses the external strobe signal once.
+  void pulseStrobe() {
+    // The 74HC595 output update happens on latch edge in setDataBus().
+    delayMicroseconds(strobeDelayMicros);
+    digitalWrite(STROBE_PIN, LOW);
+    delayMicroseconds(strobeDelayMicros);
+    digitalWrite(STROBE_PIN, HIGH);
+  }
+
+  // Sends one byte to outputs and applies the configured inter-byte delay.
+  void outputByte(uint8_t value, uint32_t addr) {
+    // Shifts one byte to the 74HC595 using SPI and latches the new output state.
+    digitalWrite(LATCH_PIN, LOW);
+    SPI.transfer(value);
+    digitalWrite(LATCH_PIN, HIGH);
+    pulseStrobe();
+    delayMicroseconds(strobeDelayMicros);
+  }
+
+  void testSPItransfer() {
+    Serial.println(F("Testing SPI transfer, sending fixed Byte 0x35."));
+    Serial.println(F("Press any key to stop test."));
+    #ifdef USE_DY1_DISPLAY
+      set_static_message(F("tst"));
+    #endif
+    clearDataBus();
+    do {
+      outputByte(0x35, 0);
+      delay(1);
+    } while (not Serial.available());
+    Serial.println(F("Ready."));
+  }
+#endif
+
+#ifdef PEPS_SPI
+  // MODE 3, sets address counter to 0
+  void clearDataBus() {
+  }
+
+  void pepsMode3() {
+    digitalWrite(M0_PIN, HIGH);
+    digitalWrite(M1_PIN, HIGH);
+  }
+
+
+  void clkPulse() {
+    digitalWrite(LATCH_CLK, HIGH);
+    digitalWrite(LATCH_CLK, LOW);
+  }
+
+
+  void pepsMode0() {
+    digitalWrite(M0_PIN, LOW);
+    digitalWrite(M1_PIN, LOW);
+  }
+
+  void pepsReset() {
+    digitalWrite(DATA_PIN, LOW);
+    digitalWrite(LATCH_CLK, LOW);
+    pepsMode0();
+    delayMicroseconds(1);
+    pepsMode3();
+  }
+
+  void pepsInc() {
+    pepsMode0();
+    clkPulse();
+    pepsMode3();
+  }
+
+  void startBlockTransfer(uint32_t startAddr) { 
+    SPI.end(); // we use bit-banging for PEPS SPI, so disable hardware SPI
+    pinMode(LATCH_CLK, OUTPUT);
+    digitalWrite(LATCH_CLK, LOW);
+    pinMode(DATA_PIN, OUTPUT);
+    pepsReset();
+    if (startAddr > 0) {
+      startAddr--;
+      for (uint32_t i = 0; i < startAddr; i++) {
+        pepsInc();
+      }
     }
   }
 
-  outFile.close();
-  Serial.print(F("EPROM dump saved to "));
-  Serial.print(filename);
-  Serial.print(F(", bytes="));
-  Serial.println(len);
-  return true;
-}
-
-void testSPItransfer() {
-  // Write test pattern to internal registers and read back to verify correctness.
-  Serial.println(F("Testing GODIL SPI transfer..."));
-  for (uint32_t i = 0; i < 0x0400; ++i) {
-    outputByte(1 << (i % 8), i); // DIL Tester LED Test pattern
+  void stopBlockTransfer() { 
+    pepsMode3();
+    digitalWrite(LATCH_CLK, HIGH);
+    SPI.begin();
+    SPI.setDataMode(SPI_MODE0);
+    SPI.setFrequency(4000000);
   }
-  uint32_t start_addr = 0x0400;
-  uint32_t multiplier = 19;
-  uint8_t vals_written[16];
-  for (uint32_t i = 0; i < 16; ++i) {
-    vals_written[i] = static_cast<uint8_t>(0xFF - i*11);
-    outputByte(vals_written[i], start_addr + i*multiplier);
+
+  // Sends one byte to outputs and applies the configured inter-byte delay.
+  void outputByte(uint8_t value, uint32_t addr) {
+    // Shifts one byte to the 74HC595 using SPI and latches the new output state.
+    digitalWrite(DATA_PIN, LOW);
+    digitalWrite(M1_PIN, LOW);
+    for (int8_t i = 7; i >= 0; i--) {
+      #ifdef DATA_INVERT
+        digitalWrite(DATA_PIN, !((value >> i) & 0x01));
+      #else
+        digitalWrite(DATA_PIN, (value >> i) & 0x01);
+      #endif
+      clkPulse();
+    }
+    digitalWrite(DATA_PIN, LOW);
+    digitalWrite(M1_PIN, HIGH);
+    digitalWrite(M0_PIN, LOW);
+    clkPulse(); // Write Byte
+    pepsInc();
   }
-  for (uint32_t i = 0; i < 16; ++i) {
-    // read back data from internal register
-    Serial.print(F("Addr 0x"));
-    Serial.print(start_addr + i*multiplier, HEX);
-    Serial.print(F(", Written 0x"));
-    Serial.print(vals_written[i], HEX);
-    Serial.print(F(", Received 0x"));
-    Serial.println(inputByte(start_addr + i*multiplier), HEX);
+
+  void testSPItransfer() {
+    Serial.println(F("Testing SPI transfer, sending fixed Byte 0x35."));
+    Serial.println(F("Press any key to stop test."));
+    #ifdef USE_DY1_DISPLAY
+      set_static_message(F("tst"));
+    #endif
+    startBlockTransfer(0);
+    do {
+      outputByte(0x35, 0);
+      delayMicroseconds(100);
+    } while (not Serial.available());
+    stopBlockTransfer();
+    Serial.read(); // clear any pending input
   }
-}
-
-#else
-
-// Clears all output bits on the shift register.
-void clearDataBus() {
-  digitalWrite(LATCH_PIN, LOW);
-  SPI.transfer(0);
-  digitalWrite(LATCH_PIN, HIGH);
-}
-
-// Pulses the external strobe signal once.
-void pulseStrobe() {
-  // The 74HC595 output update happens on latch edge in setDataBus().
-  delayMicroseconds(strobeDelayMicros);
-  digitalWrite(STROBE_PIN, LOW);
-  delayMicroseconds(strobeDelayMicros);
-  digitalWrite(STROBE_PIN, HIGH);
-}
-
-// Sends one byte to outputs and applies the configured inter-byte delay.
-void outputByte(uint8_t value, uint32_t addr) {
-  // Shifts one byte to the 74HC595 using SPI and latches the new output state.
-  digitalWrite(LATCH_PIN, LOW);
-  SPI.transfer(value);
-  digitalWrite(LATCH_PIN, HIGH);
-  pulseStrobe();
-  delayMicroseconds(strobeDelayMicros);
-}
-
-void testSPItransfer() {
-  Serial.println(F("Testing SPI transfer not supported in this mode."));
-}
-
 #endif
 
-
+void eraseEPROM() {
+  Serial.println(F("Erasing EPROM..."));
+  #ifdef USE_DY1_DISPLAY
+    set_static_message(F("ErS"));
+  #endif
+  startBlockTransfer(0);
+  for (uint32_t i = 0; i < maxBytesToTransfer; ++i) {
+    outputByte(0xFF, i);
+    if ((i & 0x3F) == 0) {
+      delay(0); yield(); // allow background tasks to run
+    }
+  }
+  stopBlockTransfer();
+  #ifdef USE_DY1_DISPLAY
+    set_static_message(F("rdy"));
+  #endif
+  Serial.println(F("EPROM erase complete."));
+}
 
 // ##############################################################################
 //
@@ -951,7 +1104,7 @@ void listLittleFsEntries() {
     Serial.println(F(" bytes)"));
     ++entryCount;
     totalBytes += bytes;
-    delay(0);
+    delay(0); yield();
   }
 
   if (entryCount == 0) {
@@ -979,6 +1132,7 @@ void printWebInfo() {
   Serial.println(lastFileBytes);
   Serial.println(F("Serial commands:"));
   Serial.println(F("  h: print web/status info and help text (this one)"));
+  Serial.println(F("  e: erase EPROM"));
   Serial.println(F("  r: replay staged file (blocking)"));
   Serial.println(F("  i: print file debug info"));
   Serial.println(F("  l: list LittleFS directory entries"));
@@ -1001,7 +1155,7 @@ bool readSerialByteWithTimeout(uint8_t &outByte, uint32_t timeoutMs) {
       outByte = static_cast<uint8_t>(Serial.read());
       return true;
     }
-    delay(0);
+    delay(0); yield();
   }
   return false;
 }
@@ -1230,7 +1384,7 @@ void sendFsDirectoryHtmlStreamed() {
     row += F("'><button class='action-btn' type='submit'>Delete</button></form>");
     row += F("</div></td></tr>");
     server.sendContent(row);
-    delay(0);
+    delay(0); yield();
   }
 
   if (!any) {
@@ -1250,15 +1404,27 @@ void handleRoot() {
 
   server.sendContent(F("<!doctype html><html><head><meta charset='utf-8'>"));
   server.sendContent(F("<meta name='viewport' content='width=device-width,initial-scale=1'>"));
-  server.sendContent(F("<title>ESIM/GODIL Binary Uploader</title>"));
+#ifdef GODIL_SPI
+  server.sendContent(F("<title>GODIL Binary Uploader</title>"));
+#endif
+#ifdef ESIM_SPI
+  server.sendContent(F("<title>ESIM Binary Uploader</title>"));
+#endif
+#ifdef PEPS_SPI
+  server.sendContent(F("<title>PEPS Binary Uploader</title>"));
+#endif
   server.sendContent(F("<style>"));
   server.sendContent(F("body{font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:24px;}"));
   server.sendContent(F(".card{width:780px;max-width:calc(100vw - 48px);margin:0 auto;background:#111827;border:1px solid #334155;border-radius:16px;padding:24px;box-shadow:0 20px 50px rgba(0,0,0,.25);box-sizing:border-box;}h1{margin-top:0;font-size:28px;}p,li{line-height:1.5;}label{display:block;margin:16px 0 8px;}input[type=file],input[type=text]{display:block;width:100%;padding:12px;background:#0b1220;border:1px solid #334155;color:#e2e8f0;border-radius:10px;box-sizing:border-box;}button{margin-top:16px;background:#22c55e;border:0;color:#052e16;font-weight:700;padding:12px 18px;border-radius:10px;cursor:pointer;}button[disabled]{opacity:.65;cursor:not-allowed;}.actions{display:inline-flex;align-items:center;gap:6px;}.actions form{margin:0;}.action-btn{display:inline-flex;align-items:center;justify-content:center;min-width:84px;height:25px;margin:0;padding:0 10px;font-size:12px;font-weight:700;line-height:1;border-radius:10px;border:0;background:#22c55e;color:#052e16;text-decoration:none;cursor:pointer;box-sizing:border-box;vertical-align:middle;}code{background:#0b1220;padding:2px 6px;border-radius:6px;}.muted{color:#94a3b8;}.messages{min-height:72px;margin:16px 0;display:flex;flex-direction:column;justify-content:flex-start;}.msg{margin:0;padding:12px 14px;background:#0b1220;border-left:4px solid #38bdf8;border-radius:8px;}.msg.wait{border-left-color:#f59e0b;}.msg.ok{border-left-color:#22c55e;}</style></head><body><div class='card'>"));
 
 #ifdef GODIL_SPI
   server.sendContent(F("<h1>GODIL Binary Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
-#else
+#endif
+#ifdef ESIM_SPI
   server.sendContent(F("<h1>ESIM Binary Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
+#endif
+#ifdef PEPS_SPI
+  server.sendContent(F("<h1>PEPS Binary Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
 #endif
 
   server.sendContent(F("<form id='uploadForm' method='POST' action='/upload' enctype='multipart/form-data'>"));
@@ -1316,9 +1482,14 @@ void handleRoot() {
   sendFsDirectoryHtmlStreamed();
 
   server.sendContent(F("<div style='margin-top:18px;padding-top:12px;border-top:1px solid #334155'>"));
+  server.sendContent(F("<div style='display:flex;gap:8px;align-items:center'>"));
   server.sendContent(F("<form method='POST' action='/reset-settings' onsubmit=\"return confirm('Clear saved defaults?');\">"));
   server.sendContent(F("<button type='submit' style='background:#f59e0b;color:#111827'>Clear saved defaults</button>"));
-  server.sendContent(F("</form></div>"));
+  server.sendContent(F("</form>"));
+  server.sendContent(F("<form method='POST' action='/erase-eprom' onsubmit=\"return confirm('Erase EPROM now?');\">"));
+  server.sendContent(F("<button type='submit' style='background:#ef4444;color:#ffffff'>Erase EPROM</button>"));
+  server.sendContent(F("</form>"));
+  server.sendContent(F("</div></div>"));
 
   server.sendContent(F("<script>"));
   server.sendContent(F("(()=>{const form=document.getElementById('uploadForm');const btn=document.getElementById('uploadButton');const wait=document.getElementById('waitNotice');const live=document.getElementById('liveNotice');const fileInput=document.getElementById('binfile');const uploadName=document.getElementById('uploadName');if(!form||!btn||!wait||!live){return;}form.addEventListener('submit',()=>{if(uploadName&&fileInput&&fileInput.files&&fileInput.files[0]){uploadName.value=fileInput.files[0].name||'';}btn.disabled=true;btn.textContent='Uploading...';wait.style.display='block';});const tick=()=>{fetch('/status',{cache:'no-store'}).then(r=>r.json()).then(s=>{const stLast=document.getElementById('stLastFileBytes');const stProgress=document.getElementById('stProgress');const stTotal=document.getElementById('stTotalBytes');if(stLast){stLast.textContent=s.lastFileBytes;}if(stProgress){stProgress.textContent=s.streamOffset+' / '+s.stagedFileBytes;}if(stTotal){stTotal.textContent=s.totalBytesSent;}}).catch(()=>{});};tick();setInterval(tick,1000);})();"));
@@ -1471,6 +1642,18 @@ void handleResetSettings() {
   staSsid = String(kStaSsid);
   staPassword = String(kStaPassword);
   pendingMessage = F("Saved defaults cleared.");
+  redirectToRoot();
+}
+
+void handleEraseEprom() {
+  if (uploadInProgress) {
+    pendingMessage = F("Cannot erase: upload is active.");
+    redirectToRoot();
+    return;
+  }
+
+  eraseEPROM();
+  pendingMessage = F("EPROM erased.");
   redirectToRoot();
 }
 
@@ -1651,7 +1834,7 @@ void handleUpload() {
       }
 
       // Keep the HTTP/TCP stack responsive while receiving upload chunks.
-      delay(0);
+      delay(0); yield();
     }
   } else if (upload.status == UPLOAD_FILE_END) {
     if (uploadStagingFile) {
@@ -1800,6 +1983,7 @@ void serverInit() {
   server.on("/stream-file", HTTP_POST, handleStreamFile);
   server.on("/delete-file", HTTP_POST, handleDeleteFile);
   server.on("/reset-settings", HTTP_POST, handleResetSettings);
+  server.on("/erase-eprom", HTTP_POST, handleEraseEprom);
   server.on("/dump-eprom", HTTP_POST, handleDumpEprom);
   server.on("/upload", HTTP_POST, handleUploadDone, handleUpload);
   server.begin();
@@ -1851,7 +2035,8 @@ bool startPlaybackFromStaging(uint32_t startAddr) {
   #ifdef USE_DY1_DISPLAY
     set_static_message(F("rpl"));
   #endif
-
+  
+  startBlockTransfer(startAddr);
   while (playbackFile.available()) {
     const int nextByte = playbackFile.read();
     if (nextByte < 0) {
@@ -1860,13 +2045,14 @@ bool startPlaybackFromStaging(uint32_t startAddr) {
 
     outputByte(static_cast<uint8_t>(nextByte), startAddr + static_cast<uint32_t>(streamOffset));
     ++streamOffset;
-  ++playbackBytesSent;
+    ++playbackBytesSent;
     ++totalBytesSent;
 
     if ((streamOffset & 0x1F) == 0) {
-      delay(0);
+      delay(0); yield();
     }
   }
+  stopBlockTransfer();
 
   playbackFile.close();
   Serial.println(F("Finished playback."));
@@ -1886,8 +2072,11 @@ bool startPlaybackFromStaging(uint32_t startAddr) {
   }
 #endif
   setUpSendLed(false);
+  #ifdef USE_DY1_DISPLAY
+    set_static_message(F("rdy"));
+  #endif
   clearDataBus();
-  delay(0);
+  delay(0); yield();
   return true;
 }
 
@@ -2008,7 +2197,7 @@ void processSerialUploadCommand() {
     }
 
     if ((i & 0x1F) == 0) {
-      delay(0);
+      delay(0); yield();
     }
   }
 
@@ -2080,12 +2269,14 @@ void processSerialCommands() {
   String dumpLine;
   String filename;
   String wifiValue;
-  uint32_t startAddr = 0;
-  uint16_t len = 0;
   while (Serial.available() > 0) {
     const char cmd = static_cast<char>(Serial.read());
     Serial.println();
     switch (cmd) {
+      case 'e':
+      case 'E':
+        eraseEPROM();
+        break;
       case 'r':
       case 'R':
         startPlaybackFromStaging(resolveStartAddressForPath(currentFilePath));
@@ -2104,6 +2295,9 @@ void processSerialCommands() {
         break;
       case 'x':
       case 'X':
+        #ifdef USE_DY1_DISPLAY
+          set_static_message(F("rdy"));
+        #endif
         Serial.println(F("Ready."));
         break;
       case 't':
@@ -2172,6 +2366,8 @@ void processSerialCommands() {
       case 'd':
       case 'D':
         #ifdef GODIL_SPI
+          uint32_t startAddr = 0;
+          uint16_t len = 0;
           if (!readSerialLine(dumpLine, kSerialUploadTimeoutMs * 20U)) {
             Serial.write(kSerialNakByte);
             Serial.println(F("ERROR: timeout while reading dump arguments."));
@@ -2237,38 +2433,58 @@ void setup() {
   Serial.begin(115200);
   delay(100);
 
-  SPI.begin();
-  SPI.setFrequency(10000000);
-  SPI.setDataMode(SPI_MODE0);
-  SPI.setBitOrder(MSBFIRST);
-
-  pinMode(LATCH_PIN, OUTPUT);
-  digitalWrite(LATCH_PIN, HIGH);
-
-#ifdef GODIL_SPI
-  pinMode(LED_UPLOAD, OUTPUT);
-  digitalWrite(LED_UPLOAD, LOW);
-#else
-  pinMode(STROBE_PIN, OUTPUT);
-  digitalWrite(STROBE_PIN, HIGH); 
-#endif
-#ifdef USE_DY1_DISPLAY
-  clear_disp(0);
-  pinMode(DY1_LATCH_PIN, OUTPUT);
-  digitalWrite(DY1_LATCH_PIN, LOW);
-  set_static_message(F("rst"));
-#endif
+  Serial.println();
 
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
   pinMode(LED_SENDDATA, OUTPUT);
   digitalWrite(LED_SENDDATA, LOW);
-  Serial.println();
+
   #ifdef GODIL_SPI
+    pinMode(LED_UPLOAD, OUTPUT);
+    digitalWrite(LED_UPLOAD, LOW);
     Serial.println(F("GODIL Binary Uploader by Carsten Meyer 7/2026"));
-  #else
-    Serial.println(F("ESIM Binary Uploader by Carsten Meyer 7/2026"));
+    SPI.begin();
+    SPI.setFrequency(10000000);
+    SPI.setDataMode(SPI_MODE0);
+    SPI.setBitOrder(MSBFIRST);
   #endif
+
+  #ifdef ESIM_SPI
+    pinMode(LATCH_PIN, OUTPUT);
+    digitalWrite(LATCH_PIN, HIGH);
+    pinMode(STROBE_PIN, OUTPUT);
+    digitalWrite(STROBE_PIN, HIGH); 
+    Serial.println(F("ESIM Binary Uploader by Carsten Meyer 7/2026"));
+    SPI.begin();
+    SPI.setFrequency(10000000);
+    SPI.setDataMode(SPI_MODE0);
+    SPI.setBitOrder(MSBFIRST);
+  #endif
+
+  #ifdef PEPS_SPI
+    pinMode(LATCH_CLK, OUTPUT);
+    digitalWrite(LATCH_CLK, LOW);
+    pinMode(DATA_PIN, OUTPUT);
+    digitalWrite(DATA_PIN, LOW);
+    pinMode(M0_PIN, OUTPUT);
+    digitalWrite(M0_PIN, HIGH);
+    pinMode(M1_PIN, OUTPUT);
+    digitalWrite(M1_PIN, HIGH);
+    Serial.println(F("PEPS Binary Uploader by Carsten Meyer 7/2026"));
+    SPI.begin();
+    SPI.setFrequency(4000000);
+    SPI.setDataMode(SPI_MODE0);
+    SPI.setBitOrder(MSBFIRST);
+ #endif
+
+  #ifdef USE_DY1_DISPLAY
+    clear_disp(0);
+    pinMode(DY1_LATCH_PIN, OUTPUT);
+    digitalWrite(DY1_LATCH_PIN, LOW);
+    set_static_message(F("rst"));
+  #endif
+
   clearDataBus();
   // Blink LED as a short delay to indicate boot and allow time for the serial monitor to connect.
   #ifdef USE_WEB_SERVER
@@ -2279,6 +2495,9 @@ void setup() {
       delay(100);
     }
   #else
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(500);
+    digitalWrite(LED_BUILTIN, LOW);
   #endif
 
   if (!LittleFS.begin()) {
@@ -2320,6 +2539,8 @@ void setup() {
       set_static_message(wifiModeLabel);
       delay(500); 
       set_static_message(F("on "));
+      delay(500);
+      set_static_message(F("rdy"));
     #endif
     printWebInfo();
     Serial.println(F("Ready."));
