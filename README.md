@@ -48,4 +48,6 @@ All modules support the OHO DY1 display, a 3-digit 7-segment LED module with SPI
 
 ### PCBs
 
-For each version, I designed a one-layer PCB optimized for milling. Can be handled by JCLPCB, though. See /pcb folder.
+For each version, I designed a one-layer PCB optimized for milling. Can be handled by JCLPCB, though. There are also designs for ROM/RAM adaptors. See /pcb folder. 
+
+PCB design done with EasyPC from NumberOne Systems.
