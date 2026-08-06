@@ -57,17 +57,26 @@
 
 // Uncomment or define STA_MODE to connect to an existing Wi-Fi network instead of starting an access point.
 #define STA_MODE
-// Uncomment to enable verbose serial debug output.
-#define DEBUG
-
-// uncomment to use GODIL SPI Dual Port mode and DY1 Display
-#define ESIM_SPI
-// #define GODIL_SPI
-// #define PEPS_SPI
-#define USE_DY1_DISPLAY
 
 // uncomment to use Web Server
 #define USE_WEB_SERVER
+
+// uncomment to use  DY1 Display
+#define USE_DY1_DISPLAY
+
+// Uncomment to enable verbose serial debug output.
+#define DEBUG
+
+// Only one of the following three SPI modes can be enabled at a time. The others must be commented out.
+
+// uncomment to use ESIM EPROM simulator
+#define ESIM_SPI
+
+// uncomment to use GODIL SPI Dual Port mode for RAM emulation
+// #define GODIL_SPI
+
+// uncomment to use old PEPS EPROM simulator from Hans Lotter, Conitec
+// #define PEPS_SPI
 
 #if defined(DEBUG)
   #define DBG_PRINT(x) Serial.print(x)

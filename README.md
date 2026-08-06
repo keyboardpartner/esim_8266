@@ -40,7 +40,7 @@ New: now supports even older PEPS EPROM Simulator from c't 5/1985, page 85. This
 
 I made a versatile EPROM simulator using the legacy GODIL 40 from [OHO electronic](https://www.oho-elektronik.de/). See my other repositories. These are legacy FPGA modules sold by [Trenz electronic](https://www.trenz-electronic.de/de), but you may still find them on the web. Supports EPROMs up to 27256 (32 KByte). 
 
-This version has a nice feature: It can be used as RAM emulator for 6264 or 62256 SRAMs; in this case, you may read back the RAM contents from host system. Used it to recover old programs from my very first computer, an Acorn ATOM from 1981.
+This version has a nice feature: It can be used as RAM emulator for 6264 or 62256 SRAMs; in this case, you may read back the RAM contents from host system. Used it to recover old programs from my very first computer, an Acorn ATOM from 1981, using the rom_adapter_2 circuit. See /pcb folder. 
 
 ### OHO DY1 Support
 
