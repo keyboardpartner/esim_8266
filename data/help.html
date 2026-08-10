@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Uploader Help</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="card">
+    <h1>Uploader Help</h1>
+    <p class="muted">Quick reference for file upload, stream/config actions, and serial commands.</p>
+
+    <h2>Web Upload</h2>
+    <div class="box">
+      <p>Select a file and start address, then click <code>Upload and stream</code>.</p>
+      <p>Supported picker extensions: <code>.bin</code>, <code>.bit</code>, <code>.rom</code>.</p>
+      <p>Files are staged in LittleFS first. You can then run actions from the file table.</p>
+    </div>
+
+    <h2>File Table Actions</h2>
+    <ul>
+      <li><code>Stream</code>: sends normal data files to the selected target starting at the given address.</li>
+      <li><code>Config</code>: appears for <code>.bit</code> files and configures the FPGA via JTAG.</li>
+      <li><code>Delete</code>: removes the file from LittleFS.</li>
+    </ul>
+
+    <h2>Serial Commands</h2>
+    <ul>
+      <li><code>h</code>: print status and help text.</li>
+      <li><code>i</code>: print current file/debug info.</li>
+      <li><code>r</code>: replay current staged file.</li>
+      <li><code>c</code>: configure FPGA with staged file (JTAG build).</li>
+      <li><code>e</code>: erase device memory.</li>
+      <li><code>u</code>: framed serial upload.</li>
+      <li><code>d&lt;filename,start,len&gt;&lt;CR&gt;</code>: dump EPROM to file.</li>
+    </ul>
+
+    <h2>Troubleshooting</h2>
+    <ul>
+      <li>For MOJO-like FPGA boards, ensure the correct bitstream "fpga_main.bit" is present in file system. 
+      The bitstream is loaded into the FPGA during startup configuration via JTAG.</li>
+      <li>If upload fails, verify LittleFS is mounted and free space is available.</li>
+      <li>If streaming/config fails, check file exists and is non-empty.</li>
+      <li>If Wi-Fi mode falls back to AP, verify STA credentials.</li>
+    </ul>
+
+    <p style="margin-top:24px">
+      <a href="/" class="action-btn">Back</a>
+    </p>
+  </div>
+</body>
+</html>

@@ -70,13 +70,16 @@
 // Only one of the following three SPI modes can be enabled at a time. The others must be commented out.
 
 // uncomment to use ESIM EPROM simulator
-#define ESIM_SPI
+// #define ESIM_SPI
 
 // uncomment to use GODIL SPI Dual Port mode for RAM emulation
 // #define GODIL_SPI
 
 // uncomment to use old PEPS EPROM simulator from Hans Lotter, Conitec
 // #define PEPS_SPI
+
+// uncomment to use MOJO board with Spartan XC6SLX9 
+#define JTAG_SPARTAN6
 
 #if defined(DEBUG)
   #define DBG_PRINT(x) Serial.print(x)
@@ -90,6 +93,7 @@
 
 
 #ifdef GODIL_SPI
+  #define LATCH_PIN 15 // FPGA SPI /SS
   #define LED_SENDDATA 4
   #define LED_UPLOAD 5
   constexpr const char *kApSsid = "GODIL Uploader";
@@ -97,7 +101,7 @@
 #endif
 
 #ifdef ESIM_SPI
-  #define LATCH_PIN 15 // 74HC595 RCLK (ST_CP) latch pin or FPGA SPI /SS
+  #define LATCH_PIN 15 // 74HC595 RCLK (ST_CP) latch pin
   #define STROBE_PIN 5
   #define LED_SENDDATA 4
   #define LED_UPLOAD 2 // LED_BUILTIN on ESP8266 boards
@@ -116,6 +120,14 @@
   #define DATA_INVERT // bei invertierendem Bustreiber
   constexpr const char *kApSsid = "PEPS Uploader";
   constexpr uint32_t maxBytesToTransfer = 16384; // 16KB for PEPS RAM
+#endif
+
+#ifdef JTAG_SPARTAN6
+  #define LATCH_PIN 15 // FPGA SPI /SS
+  #include "jtag_send.h"
+  constexpr const char *kApSsid = "SPARTAN 6 Uploader";
+  constexpr uint32_t maxBytesToTransfer = 65536;
+  uint32_t jtag_idcode = 0;
 #endif
 
 constexpr const char *kApPassword = "0000";
@@ -200,6 +212,7 @@ String staPassword = String(kStaPassword);
 
 bool currentUploadFsError = false;
 String pendingMessage;
+bool likelyFreshFsImage = false;
 
 String htmlEscape(const String &input);
 String urlEncodeComponent(const String &input);
@@ -208,6 +221,7 @@ bool parseUnsignedValue(const String &text, uint32_t &valueOut);
 bool loadStartAddressForFile(const String &filePath, uint32_t &startAddrOut);
 bool loadGlobalSettings();
 bool saveGlobalSettings();
+bool isNonStreamableFilePath(const String &path);
 
 uint32_t resolveStartAddressForPath(const String &path) {
   uint32_t startAddr = 0;
@@ -322,12 +336,16 @@ void test_display() {
 
 // Controls the onboard LED used as HTTP upload activity indicator.
 void setUploadLed(bool on) {
-  digitalWrite(LED_UPLOAD, on ? HIGH : LOW);
+  #ifndef JTAG_SPARTAN6
+    digitalWrite(LED_UPLOAD, on ? HIGH : LOW);
+  #endif
 }
 
 // Controls a dedicated LED that indicates active file playback/streaming.
 void setUpSendLed(bool on) {
-  digitalWrite(LED_SENDDATA, on ? HIGH : LOW);
+  #ifndef JTAG_SPARTAN6
+    digitalWrite(LED_SENDDATA, on ? HIGH : LOW);
+  #endif
 }
 
 
@@ -603,6 +621,135 @@ void setUpSendLed(bool on) {
   }
 #endif
 
+#ifdef JTAG_SPARTAN6
+ void clearDataBus() {
+  }
+
+  void startBlockTransfer(uint32_t startAddr) { 
+  }
+  void stopBlockTransfer() { 
+  }
+
+  uint32_t spi_xfer32_ss(uint32_t data) {
+    uint32_t rxlong;
+    digitalWrite(LATCH_PIN, LOW);
+    rxlong  = SPI.transfer16(data >> 16) << 16;
+    rxlong |= SPI.transfer16(data & 0xFFFF);
+    digitalWrite(LATCH_PIN, HIGH);
+    return rxlong;
+  }
+
+  // Sends one byte to device output
+  void outputByte(uint8_t value, uint32_t addr) {
+    uint32_t txlong = (addr << 8) | value;
+    // Shifts one byte to the 74HC595 using SPI and latches the new output state.
+    digitalWrite(LATCH_PIN, LOW);
+    SPI.write32(txlong | 0x80000000); // write command and address to write
+    digitalWrite(LATCH_PIN, HIGH);
+  }
+
+  // receives one byte from device
+  uint8_t inputByte(uint32_t addr) {
+    uint32_t txlong = (addr << 8);
+    digitalWrite(LATCH_PIN, LOW);
+    SPI.write32(txlong); // set address to read from internal register
+    digitalWrite(LATCH_PIN, HIGH);
+    uint32_t rxlong = spi_xfer32_ss(0) & 0xFF; // read back data from internal register
+    return static_cast<uint8_t>(rxlong);
+  }
+
+  // Reads bytes from the slave device and stores them into a LittleFS file.
+  bool writeEPROMtoFile(String filename, uint32_t start_addr, uint16_t len) {
+    if (!fsMounted) {
+      Serial.println(F("ERROR: filesystem not mounted."));
+      return false;
+    }
+
+    filename.trim();
+    if (filename.length() == 0) {
+      Serial.println(F("ERROR: empty filename."));
+      return false;
+    }
+
+    if (filename[0] != '/') {
+      filename = String('/') + filename;
+    }
+
+    if (filename.indexOf("..") >= 0) {
+      Serial.println(F("ERROR: invalid filename."));
+      return false;
+    }
+
+    if (filename.length() > kMaxFsPathLength) {
+      Serial.println(F("ERROR: filename too long."));
+      return false;
+    }
+
+    if (len == 0) {
+      Serial.println(F("ERROR: len must be > 0."));
+      return false;
+    }
+
+    LittleFS.remove(filename);
+    File outFile = LittleFS.open(filename, "w");
+    if (!outFile) {
+      Serial.print(F("ERROR: cannot open file for writing: "));
+      Serial.println(filename);
+      return false;
+    }
+
+    for (uint32_t i = 0; i < len; ++i) {
+      const uint8_t value = inputByte(start_addr + i);
+      if (outFile.write(&value, 1) != 1) {
+        outFile.close();
+        LittleFS.remove(filename);
+        Serial.print(F("ERROR: write failed at offset "));
+        Serial.println(i);
+        return false;
+      }
+
+      if ((i & 0x1F) == 0) {
+        delay(0); yield();
+      }
+    }
+
+    outFile.close();
+    Serial.print(F("EPROM dump saved to "));
+    Serial.print(filename);
+    Serial.print(F(", bytes="));
+    Serial.println(len);
+    return true;
+  }
+
+  void testSPItransfer() {
+    // Write test pattern to internal registers and read back to verify correctness.
+    Serial.println(F("Testing GODIL SPI transfer to RAM..."));
+    #ifdef USE_DY1_DISPLAY
+      set_static_message(F("tst"));
+    #endif
+    for (uint32_t i = 0; i < 0x0400; ++i) {
+      outputByte(1 << (i % 8), i); // DIL Tester LED Test pattern
+    }
+    uint32_t start_addr = 0x0400;
+    uint32_t multiplier = 19;
+    uint8_t vals_written[16];
+    for (uint32_t i = 0; i < 16; ++i) {
+      vals_written[i] = static_cast<uint8_t>(0xFF - i*11);
+      outputByte(vals_written[i], start_addr + i*multiplier);
+    }
+    for (uint32_t i = 0; i < 16; ++i) {
+      // read back data from internal register
+      Serial.print(F("Addr 0x"));
+      Serial.print(start_addr + i*multiplier, HEX);
+      Serial.print(F(", Written 0x"));
+      Serial.print(vals_written[i], HEX);
+      Serial.print(F(", Received 0x"));
+      Serial.println(inputByte(start_addr + i*multiplier), HEX);
+    }
+    Serial.println(F("Ready."));
+  }
+#endif
+
 void eraseEPROM() {
   Serial.println(F("Erasing EPROM..."));
   #ifdef USE_DY1_DISPLAY
@@ -748,6 +895,12 @@ String makeWebUploadFilePath(const String &displayFilename) {
   const String fitted = fitFilenameToLength(displayFilename, maxNameLen);
 
   String path = String('/') + fitted;
+
+  // Static web assets should keep a canonical filename and replace existing files.
+  if (isNonStreamableFilePath(path)) {
+    return path;
+  }
+
   if (!LittleFS.exists(path)) {
     return path;
   }
@@ -776,6 +929,58 @@ String normalizeFsPath(const String &rawPath) {
     path = String('/') + path;
   }
   return path;
+}
+
+bool isBitstreamFilePath(const String &path) {
+  String filename = baseNameFromPath(path);
+  filename.toLowerCase();
+  return filename.endsWith(F(".bit"));
+}
+
+bool isNonStreamableFilePath(const String &path) {
+  String filename = baseNameFromPath(path);
+  filename.toLowerCase();
+  return filename.endsWith(F(".css")) || filename.endsWith(F(".html")) || filename.endsWith(F(".htm"));
+}
+
+const __FlashStringHelper *primaryActionLabelForPath(const String &path) {
+  if (isBitstreamFilePath(path)) {
+    return F("Config");
+  }
+  if (isNonStreamableFilePath(path)) {
+    return F("Invalid");
+  }
+  return F("Stream");
+}
+
+void warnIfLikelyFreshFilesystemImage() {
+  if (!fsMounted) {
+    likelyFreshFsImage = false;
+    return;
+  }
+
+  Dir dir = LittleFS.openDir("/");
+  size_t visibleFileCount = 0;
+  size_t nonPackagedCount = 0;
+
+  while (dir.next()) {
+    const String path = normalizeFsPath(dir.fileName());
+
+    if (path == kGlobalSettingsPath || path == kLegacyGlobalSettingsPath || path.endsWith(F(".ini"))) {
+      continue;
+    }
+
+    ++visibleFileCount;
+    if (path != F("/help.html") && path != F("/style.css")) {
+      ++nonPackagedCount;
+    }
+  }
+
+  likelyFreshFsImage = (visibleFileCount > 0 && nonPackagedCount == 0);
+
+  if (likelyFreshFsImage) {
+    Serial.println(F("WARN: LittleFS contains only packaged static files. If you ran uploadfs recently, user-uploaded files were replaced by the new image."));
+  }
 }
 
 String makePerFileIniPath(const String &filePath) {
@@ -1034,12 +1239,18 @@ String buildFsDirectoryHtml() {
     html += F("<td style='padding:6px 8px;border-bottom:1px solid #1f2937;white-space:nowrap;vertical-align:middle'>");
     html += F("<div class='actions'>");
 
-    html += F("<form id='stream_");
-    html += urlEncodeComponent(path);
-    html += F("' method='POST' action='/stream-file'>");
-    html += F("<input type='hidden' name='path' value='");
-    html += htmlEscape(path);
-    html += F("'><button class='action-btn' type='submit'>Stream</button></form>");
+    if (isNonStreamableFilePath(path)) {
+      html += F("<button class='action-btn' type='button' disabled title='This file type is not streamable'>Invalid</button>");
+    } else {
+      html += F("<form id='stream_");
+      html += urlEncodeComponent(path);
+      html += F("' method='POST' action='/stream-file'>");
+      html += F("<input type='hidden' name='path' value='");
+      html += htmlEscape(path);
+      html += F("'><button class='action-btn' type='submit'>");
+      html += primaryActionLabelForPath(path);
+      html += F("</button></form>");
+    }
 
     html += F("<form method='POST' action='/delete-file' onsubmit=\"return confirm('Delete file?');\">");
     html += F("<input type='hidden' name='path' value='");
@@ -1059,10 +1270,8 @@ String buildFsDirectoryHtml() {
 
 // Prints current staged file and streaming state for serial debugging.
 void printFileInfo() {
-#if defined(DEBUG)
   const bool stagedExists = fsMounted && currentFilePath.length() > 0 && LittleFS.exists(currentFilePath);
   size_t stagedSize = 0;
-
   if (stagedExists) {
     File infoFile = LittleFS.open(currentFilePath, "r");
     if (infoFile) {
@@ -1070,8 +1279,8 @@ void printFileInfo() {
       infoFile.close();
     }
   }
-
-  Serial.println(F("File Info"));
+  Serial.println("");
+  Serial.println(F("------ File Info ------"));
   Serial.print(F("fsMounted: "));
   Serial.println(fsMounted ? F("true") : F("false"));
   Serial.print(F("stagedExists: "));
@@ -1086,27 +1295,24 @@ void printFileInfo() {
   Serial.println(lastFilename.length() ? lastFilename : String(F("none")));
   Serial.print(F("lastFileBytes: "));
   Serial.println(lastFileBytes);
-#else
-  Serial.println(F("Serial command 'i': DEBUG is disabled."));
-#endif
+  Serial.println(F("-----------------------"));
 }
 
 // Lists all LittleFS root directory entries on serial.
 void listLittleFsEntries() {
+  Serial.println("");
   if (!fsMounted) {
     Serial.println(F("ERROR: filesystem not mounted."));
     return;
   }
-
   Dir dir = LittleFS.openDir("/");
   size_t entryCount = 0;
   size_t totalBytes = 0;
 
-  Serial.println(F("LittleFS directory entries:"));
+  Serial.println(F("---- Directory Info ----"));
   while (dir.next()) {
     const String path = normalizeFsPath(dir.fileName());
     const size_t bytes = dir.fileSize();
-    Serial.print(F("  "));
     Serial.print(path);
     Serial.print(F(" ("));
     Serial.print(bytes);
@@ -1115,18 +1321,19 @@ void listLittleFsEntries() {
     totalBytes += bytes;
     delay(0); yield();
   }
-
   if (entryCount == 0) {
     Serial.println(F("  <empty>"));
   }
-
   Serial.print(F("Entries: "));
   Serial.print(entryCount);
   Serial.print(F(", total bytes: "));
   Serial.println(totalBytes);
+  Serial.println(F("-----------------------"));
 }
 
 void printWebInfo() {
+  Serial.println("");
+  Serial.println(F("------ WiFi Info ------"));
   Serial.print(F("Wi-Fi mode: "));
   Serial.println(wifiModeLabel);
   Serial.print(F("Wi-Fi STA SSID: "));
@@ -1139,22 +1346,30 @@ void printWebInfo() {
   Serial.println(lastFilename.length() ? lastFilename : String(F("none")));
   Serial.print(F("Last file size: "));
   Serial.println(lastFileBytes);
-  Serial.println(F("Serial commands:"));
-  Serial.println(F("  h: print web/status info and help text (this one)"));
-  Serial.println(F("  e: erase EPROM"));
-  Serial.println(F("  r: replay staged file (blocking)"));
-  Serial.println(F("  i: print file debug info"));
-  Serial.println(F("  l: list LittleFS directory entries"));
-  Serial.println(F("  x: print \"Ready.\" for handshaking with serial uploader"));
-  Serial.println(F("  t: test SPI transfer"));
-  Serial.println(F("  w<ssid><CR>: set STA Wi-Fi SSID"));
-  Serial.println(F("  p<password><CR>: set STA Wi-Fi password"));
-  Serial.println(F("  n<filename><CR>: set next serial upload filename"));
-  Serial.println(F("  u<lenLo><lenHi><data...><cksLo><cksHi>: framed serial upload"));
-  Serial.println(F("  d<filename,start,len><CR>: dump EPROM to file"));
-  Serial.println(F("     start/len accept decimal or 0x-prefixed hex"));
+  Serial.println(F("-----------------------"));
 }  // namespace
 
+void printSerialCommandsInfo() {
+  Serial.println("");
+  Serial.println(F("--- Serial commands ---"));
+  Serial.println(F("h: print web/status info and help text (this one)"));
+  #ifdef JTAG_SPARTAN6
+    Serial.println(F("c: config FPGA with last/staged file"));
+  #endif
+  Serial.println(F("e: erase EPROM"));
+  Serial.println(F("r: replay last/staged file (blocking)"));
+  Serial.println(F("i: print file debug info"));
+  Serial.println(F("l: list LittleFS directory entries"));
+  Serial.println(F("x: print \"Ready.\" for handshaking with serial uploader"));
+  Serial.println(F("t: test SPI transfer"));
+  Serial.println(F("w<ssid><CR>: set STA Wi-Fi SSID"));
+  Serial.println(F("p<password><CR>: set STA Wi-Fi password"));
+  Serial.println(F("n<filename><CR>: set next serial upload filename"));
+  Serial.println(F("u<lenLo><lenHi><data...><cksLo><cksHi>: framed serial upload"));
+  Serial.println(F("d<filename,start,len><CR>: dump EPROM to file"));
+  Serial.println(F("(start/len accept decimal or 0x-prefixed hex)"));
+  Serial.println(F("-----------------------"));
+}  // namespace
 
 // Reads one serial byte with timeout to support robust framed transfers.
 bool readSerialByteWithTimeout(uint8_t &outByte, uint32_t timeoutMs) {
@@ -1381,12 +1596,18 @@ void sendFsDirectoryHtmlStreamed() {
     row += F("</td>");
     row += F("<td style='padding:6px 8px;border-bottom:1px solid #1f2937;white-space:nowrap;vertical-align:middle'>");
     row += F("<div class='actions'>");
-    row += F("<form id='stream_");
-    row += urlEncodeComponent(path);
-    row += F("' method='POST' action='/stream-file'>");
-    row += F("<input type='hidden' name='path' value='");
-    row += htmlEscape(path);
-    row += F("'><button class='action-btn' type='submit'>Stream</button></form>");
+    if (isNonStreamableFilePath(path)) {
+      row += F("<button class='action-btn' type='button' disabled title='This file type is not streamable'>NoStream</button>");
+    } else {
+      row += F("<form id='stream_");
+      row += urlEncodeComponent(path);
+      row += F("' method='POST' action='/stream-file'>");
+      row += F("<input type='hidden' name='path' value='");
+      row += htmlEscape(path);
+      row += F("'><button class='action-btn' type='submit'>");
+      row += primaryActionLabelForPath(path);
+      row += F("</button></form>");
+    }
     row += F("<form method='POST' action='/delete-file' onsubmit=\"return confirm('Delete file?');\">");
     row += F("<input type='hidden' name='path' value='");
     row += htmlEscape(path);
@@ -1422,23 +1643,21 @@ void handleRoot() {
 #ifdef PEPS_SPI
   server.sendContent(F("<title>PEPS Binary Uploader</title>"));
 #endif
-  server.sendContent(F("<style>"));
-  server.sendContent(F("body{font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:24px;}"));
-  server.sendContent(F(".card{width:780px;max-width:calc(100vw - 48px);margin:0 auto;background:#111827;border:1px solid #334155;border-radius:16px;padding:24px;box-shadow:0 20px 50px rgba(0,0,0,.25);box-sizing:border-box;}h1{margin-top:0;font-size:28px;}p,li{line-height:1.5;}label{display:block;margin:16px 0 8px;}input[type=file],input[type=text]{display:block;width:100%;padding:12px;background:#0b1220;border:1px solid #334155;color:#e2e8f0;border-radius:10px;box-sizing:border-box;}button{margin-top:16px;background:#22c55e;border:0;color:#052e16;font-weight:700;padding:12px 18px;border-radius:10px;cursor:pointer;}button[disabled]{opacity:.65;cursor:not-allowed;}.actions{display:inline-flex;align-items:center;gap:6px;}.actions form{margin:0;}.action-btn{display:inline-flex;align-items:center;justify-content:center;min-width:84px;height:25px;margin:0;padding:0 10px;font-size:12px;font-weight:700;line-height:1;border-radius:10px;border:0;background:#22c55e;color:#052e16;text-decoration:none;cursor:pointer;box-sizing:border-box;vertical-align:middle;}code{background:#0b1220;padding:2px 6px;border-radius:6px;}.muted{color:#94a3b8;}.messages{min-height:72px;margin:16px 0;display:flex;flex-direction:column;justify-content:flex-start;}.msg{margin:0;padding:12px 14px;background:#0b1220;border-left:4px solid #38bdf8;border-radius:8px;}.msg.wait{border-left-color:#f59e0b;}.msg.ok{border-left-color:#22c55e;}</style></head><body><div class='card'>"));
+  server.sendContent(F("<link rel='stylesheet' href='/style.css'></head><body><div class='card'>"));
 
-#ifdef GODIL_SPI
-  server.sendContent(F("<h1>GODIL Binary Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
-#endif
-#ifdef ESIM_SPI
-  server.sendContent(F("<h1>ESIM Binary Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
-#endif
-#ifdef PEPS_SPI
-  server.sendContent(F("<h1>PEPS Binary Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
-#endif
+  #ifdef GODIL_SPI
+    server.sendContent(F("<h1>GODIL Binary Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
+  #endif
+  #ifdef ESIM_SPI
+    server.sendContent(F("<h1>ESIM Binary Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
+  #endif
+  #ifdef PEPS_SPI
+    server.sendContent(F("<h1>PEPS Binary Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
+  #endif
 
   server.sendContent(F("<form id='uploadForm' method='POST' action='/upload' enctype='multipart/form-data'>"));
   server.sendContent(F("<table style='width:100%;border-collapse:separate;border-spacing:8px 6px;margin:0'><tr>"));
-  server.sendContent(F("<td style='padding:0;width:78%'><label for='binfile' style='display:block;margin:0 0 6px'>Binary file</label><input id='binfile' name='binfile' type='file' accept='.bin,application/octet-stream' required></td>"));
+  server.sendContent(F("<td style='padding:0;width:78%'><label for='binfile' style='display:block;margin:0 0 6px'>Binary file</label><input id='binfile' name='binfile' type='file' accept='.bin,.bit,.rom,application/octet-stream' required></td>"));
   server.sendContent(F("<td style='padding:0;width:22%'><label for='uploadStart' style='display:block;margin:0 0 6px'>Start (dec/0x)</label><input id='uploadStart' name='start' type='text' value='"));
   server.sendContent(htmlEscape(formatAddressForInput(lastUploadStartAddr)));
   server.sendContent(F("' maxlength='10' style='max-width:11ch' required></td>"));
@@ -1446,16 +1665,16 @@ void handleRoot() {
   server.sendContent(F("<input id='uploadName' name='uploadName' type='hidden' value=''>"));
   server.sendContent(F("<button id='uploadButton' type='submit'>Upload and stream</button></form>"));
 
-#ifdef GODIL_SPI
-  server.sendContent(F("<h3>Dump EPROM</h3>"));
-  server.sendContent(F("<form method='POST' action='/dump-eprom'>"));
-  server.sendContent(F("<table style='width:100%;border-collapse:separate;border-spacing:8px 6px;margin:0'><tr>"));
-  server.sendContent(F("<td style='padding:0;width:50%'><label for='dumpFilename' style='display:block;margin:0 0 6px'>Filename</label><input id='dumpFilename' name='filename' type='text' value='eprom_dump.bin' required></td>"));
-  server.sendContent(F("<td style='padding:0;width:28%'><label for='dumpStart' style='display:block;margin:0 0 6px'>Start (dec/0x)</label><input id='dumpStart' name='start' type='text' value='0x0000' required></td>"));
-  server.sendContent(F("<td style='padding:0;width:22%'><label for='dumpLen' style='display:block;margin:0 0 6px'>Length</label><input id='dumpLen' name='len' type='text' value='4096' required></td>"));
-  server.sendContent(F("</tr></table>"));
-  server.sendContent(F("<button type='submit'>Dump EPROM</button></form>"));
-#endif
+  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6) 
+    server.sendContent(F("<h3>Dump EPROM</h3>"));
+    server.sendContent(F("<form method='POST' action='/dump-eprom'>"));
+    server.sendContent(F("<table style='width:100%;border-collapse:separate;border-spacing:8px 6px;margin:0'><tr>"));
+    server.sendContent(F("<td style='padding:0;width:50%'><label for='dumpFilename' style='display:block;margin:0 0 6px'>Filename</label><input id='dumpFilename' name='filename' type='text' value='eprom_dump.bin' required></td>"));
+    server.sendContent(F("<td style='padding:0;width:28%'><label for='dumpStart' style='display:block;margin:0 0 6px'>Start (dec/0x)</label><input id='dumpStart' name='start' type='text' value='0x0000' required></td>"));
+    server.sendContent(F("<td style='padding:0;width:22%'><label for='dumpLen' style='display:block;margin:0 0 6px'>Length</label><input id='dumpLen' name='len' type='text' value='4096' required></td>"));
+    server.sendContent(F("</tr></table>"));
+    server.sendContent(F("<button type='submit'>Dump EPROM</button></form>"));
+  #endif
 
   server.sendContent(F("<h2>Status</h2><ul>"));
   server.sendContent(F("<li>Wi-Fi mode: <code>"));
@@ -1476,6 +1695,15 @@ void handleRoot() {
   server.sendContent(F("<li>Last upload start: <code>"));
   server.sendContent(htmlEscape(formatAddressForInput(lastUploadStartAddr)));
   server.sendContent(F("</code></li>"));
+
+  #ifdef JTAG_SPARTAN6
+    server.sendContent(F("<li>FPGA ID code: <code>"));
+    server.sendContent(htmlEscape(formatAddressForInput(jtag_idcode)));
+    server.sendContent(F("</code></li>"));
+
+  #endif
+
+
   server.sendContent(F("</ul>"));
 
   server.sendContent(F("<div class='messages'>"));
@@ -1483,6 +1711,9 @@ void handleRoot() {
     server.sendContent(F("<div class='msg'>"));
     server.sendContent(htmlEscape(message));
     server.sendContent(F("</div>"));
+  }
+  if (likelyFreshFsImage) {
+    server.sendContent(F("<div class='msg wait'>LittleFS contains only packaged static files. If you recently used uploadfs, previously uploaded runtime files were replaced by the filesystem image.</div>"));
   }
   server.sendContent(F("<div id='waitNotice' class='msg wait' style='display:none'>Upload in progress. Please wait until the page reports completion.</div>"));
   server.sendContent(F("<div id='liveNotice' class='msg ok' style='display:none'></div>"));
@@ -1495,8 +1726,11 @@ void handleRoot() {
   server.sendContent(F("<form method='POST' action='/reset-settings' onsubmit=\"return confirm('Clear saved defaults?');\">"));
   server.sendContent(F("<button type='submit' style='background:#f59e0b;color:#111827'>Clear saved defaults</button>"));
   server.sendContent(F("</form>"));
-  server.sendContent(F("<form method='POST' action='/erase-eprom' onsubmit=\"return confirm('Erase EPROM now?');\">"));
-  server.sendContent(F("<button type='submit' style='background:#ef4444;color:#ffffff'>Erase EPROM</button>"));
+  server.sendContent(F("<form method='POST' action='/erase-eprom' onsubmit=\"return confirm('Device Memory now?');\">"));
+  server.sendContent(F("<button type='submit' style='background:#ef4444;color:#ffffff'>Erase Device Memory</button>"));
+  server.sendContent(F("</form>"));
+  server.sendContent(F("<form method='GET' action='/help.html'>"));
+  server.sendContent(F("<button type='submit'>Help</button>"));
   server.sendContent(F("</form>"));
   server.sendContent(F("</div></div>"));
 
@@ -1562,8 +1796,16 @@ void handleStreamFile() {
     return;
   }
 
+  if (isNonStreamableFilePath(path)) {
+    pendingMessage = F("Cannot stream: .css/.html files are not streamable.");
+    redirectToRoot();
+    return;
+  }
+
+  const bool stagedIsBitstream = isBitstreamFilePath(path);
   if (!startPlaybackFromStaging(startAddr)) {
-    pendingMessage = F("Cannot stream: failed to send file.");
+    pendingMessage = stagedIsBitstream ? F("Cannot config: failed to process file.")
+                                       : F("Cannot stream: failed to send file.");
     redirectToRoot();
     return;
   }
@@ -1582,7 +1824,7 @@ void handleStreamFile() {
     return;
   }
 
-  pendingMessage = F("Selected file sent.");
+  pendingMessage = stagedIsBitstream ? F("Selected file configured.") : F("Selected file sent.");
   redirectToRoot();
 }
 
@@ -1898,21 +2140,29 @@ void handleUploadDone() {
       message = F("Upload failed: invalid start address.");
     } else if (!saveStartAddressForFile(currentFilePath, webUploadStartAddr)) {
       message = F("Upload failed: could not save start address.");
-    } else if (!startPlaybackFromStaging(webUploadStartAddr)) {
-      message = F("Upload failed: could not stream staged file.");
     } else {
-    lastFilename = baseNameFromPath(currentFilePath);
-    lastUploadStartAddr = webUploadStartAddr;
-    if (!saveGlobalSettings()) {
-      message = F("Upload failed: could not save global settings.");
-      pendingMessage = message;
-      redirectToRoot();
-      return;
-    }
-    message = F("Upload received. ");
-    message += String(stagedFileBytes);
-    message += F(" bytes processed from ");
-    message += htmlEscape(lastFilename.length() ? lastFilename : String("unknown file"));
+      if (isNonStreamableFilePath(currentFilePath)) {
+        message = F("Upload stored. Streaming skipped for .css/.html file types.");
+      } else if (!startPlaybackFromStaging(webUploadStartAddr)) {
+        message = isBitstreamFilePath(currentFilePath)
+                      ? F("Upload failed: could not configure staged file.")
+                      : F("Upload failed: could not stream staged file.");
+      }
+
+      if (message.length() == 0) {
+        lastFilename = baseNameFromPath(currentFilePath);
+        lastUploadStartAddr = webUploadStartAddr;
+        if (!saveGlobalSettings()) {
+          message = F("Upload failed: could not save global settings.");
+          pendingMessage = message;
+          redirectToRoot();
+          return;
+        }
+        message = F("Upload received. ");
+        message += String(stagedFileBytes);
+        message += F(" bytes processed from ");
+        message += htmlEscape(lastFilename.length() ? lastFilename : String("unknown file"));
+      }
     }
   }
   #ifdef USE_DY1_DISPLAY
@@ -1966,13 +2216,13 @@ void serverInit() {
     // Blink LED to indicate AP mode fallback due to STA connection failure.
     for (int i = 0; i < 10; ++i) {
       digitalWrite(LED_BUILTIN, HIGH);
-      digitalWrite(LED_SENDDATA, LOW);
       delay(100);
       digitalWrite(LED_BUILTIN, LOW);
-      digitalWrite(LED_SENDDATA, HIGH);
       delay(100);
     }
-    digitalWrite(LED_SENDDATA, LOW);
+    #ifndef JTAG_SPARTAN6
+      digitalWrite(LED_SENDDATA, LOW);
+    #endif
   }
 #else
   Serial.print(F("Wi-Fi in AP mode"));
@@ -1987,6 +2237,8 @@ void serverInit() {
 #endif
 
   server.on("/", HTTP_GET, handleRoot);
+  server.serveStatic("/style.css", LittleFS, "/style.css", "max-age=300");
+  server.serveStatic("/help.html", LittleFS, "/help.html", "max-age=300");
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/download-file", HTTP_GET, handleDownloadFile);
   server.on("/stream-file", HTTP_POST, handleStreamFile);
@@ -2013,16 +2265,37 @@ void serverInit() {
 // PLAYBACK FILES FROM LITTLEFS
 // ##############################################################################
 
+void dy1err() {
+  #ifdef USE_DY1_DISPLAY
+    set_static_message(F("Err"));
+    delay(1000);
+  #endif
+} 
+
 // Opens the staged file and sends it in one blocking pass.
 bool startPlaybackFromStaging(uint32_t startAddr) {
   if (!fsMounted || stagedFileBytes == 0 || currentFilePath.length() == 0 || !LittleFS.exists(currentFilePath)) {
     Serial.println(F("No file to send."));
+    dy1err();
     return false;
   }
+
+  if (isNonStreamableFilePath(currentFilePath)) {
+    Serial.println(F("Skipping playback: .css/.html files are not streamable."));
+    return false;
+  }
+
+  #ifdef JTAG_SPARTAN6
+    if (isBitstreamFilePath(currentFilePath)) {
+      jtagConfigure(currentFilePath);
+      return true;
+    }
+  #endif
 
   File playbackFile = LittleFS.open(currentFilePath, "r");
   if (!playbackFile) {
     Serial.println(F("Failed to open playback file."));
+    dy1err();
     return false;
   }
 
@@ -2080,12 +2353,14 @@ bool startPlaybackFromStaging(uint32_t startAddr) {
     DBG_PRINTLN(F("n/a"));
   }
 #endif
-  setUpSendLed(false);
   #ifdef USE_DY1_DISPLAY
+    if (playbackBytesSent < 16384) {
+      delay(500);
+    }
     set_static_message(F("rdy"));
   #endif
+  setUpSendLed(false);
   clearDataBus();
-  delay(0); yield();
   return true;
 }
 
@@ -2278,10 +2553,23 @@ void processSerialCommands() {
   String dumpLine;
   String filename;
   String wifiValue;
+  uint32_t startAddr = 0;
+  uint16_t len = 0;
   while (Serial.available() > 0) {
     const char cmd = static_cast<char>(Serial.read());
     Serial.println();
     switch (cmd) {
+      #ifdef JTAG_SPARTAN6
+        case 'c':
+        case 'C':
+          // config SPARTAN 6 FPGA via JTAG (only available in JTAG_SPARTAN6 mode)
+            #ifdef USE_DY1_DISPLAY
+              set_static_message(F("cfg"));
+            #endif
+            jtagShowIDcode();
+            jtagConfigure(currentFilePath);
+            break;
+      #endif
       case 'e':
       case 'E':
         eraseEPROM();
@@ -2300,7 +2588,11 @@ void processSerialCommands() {
         break;
       case 'h':
       case 'H':
+        #ifdef JTAG_SPARTAN6
+          jtagShowIDcode();
+        #endif
         printWebInfo();
+        printSerialCommandsInfo();
         break;
       case 'x':
       case 'X':
@@ -2374,9 +2666,7 @@ void processSerialCommands() {
         break;
       case 'd':
       case 'D':
-        #ifdef GODIL_SPI
-          uint32_t startAddr = 0;
-          uint16_t len = 0;
+        #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
           if (!readSerialLine(dumpLine, kSerialUploadTimeoutMs * 20U)) {
             Serial.write(kSerialNakByte);
             Serial.println(F("ERROR: timeout while reading dump arguments."));
@@ -2418,6 +2708,7 @@ void processSerialCommands() {
       default:
         Serial.print(F("ERROR: unknown serial command: "));
         Serial.println(cmd);
+        printSerialCommandsInfo();
         break;
     }
   }
@@ -2446,8 +2737,18 @@ void setup() {
 
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
-  pinMode(LED_SENDDATA, OUTPUT);
-  digitalWrite(LED_SENDDATA, LOW);
+  #ifndef JTAG_SPARTAN6
+    pinMode(LED_SENDDATA, OUTPUT);
+    digitalWrite(LED_SENDDATA, LOW);
+  #endif
+
+  #ifdef JTAG_SPARTAN6
+    Serial.println(F("GODIL Binary Uploader by Carsten Meyer 7/2026"));
+    SPI.begin();
+    SPI.setFrequency(10000000);
+    SPI.setDataMode(SPI_MODE0);
+    SPI.setBitOrder(MSBFIRST);
+  #endif
 
   #ifdef GODIL_SPI
     pinMode(LED_UPLOAD, OUTPUT);
@@ -2514,6 +2815,7 @@ void setup() {
     fsMounted = false;
   } else {
     fsMounted = true;
+    warnIfLikelyFreshFilesystemImage();
     loadGlobalSettings();
     if (lastFilename.length() > 0) {
       const String restoredPath = normalizeFsPath(lastFilename);
@@ -2531,8 +2833,6 @@ void setup() {
       }
     }
   }
-  printFileInfo();
-  startPlaybackFromStaging(resolveStartAddressForPath(currentFilePath));
   #ifdef USE_WEB_SERVER
     #ifdef USE_DY1_DISPLAY
       set_static_message(F("con"));
@@ -2544,22 +2844,46 @@ void setup() {
         set_number(WiFi.localIP()[i], i == 3 ? -1 : 2); // Display the last octet of the IP address
         delay(350);
       }
+      Serial.println(F("Server started."));
       delay(500); // additional delay to make the last digit visible for a bit longer
       set_static_message(wifiModeLabel);
       delay(500); 
       set_static_message(F("on "));
       delay(500);
-      set_static_message(F("rdy"));
     #endif
     printWebInfo();
-    Serial.println(F("Ready."));
   #else
     #ifdef USE_DY1_DISPLAY
       set_static_message(F("off"));
     #endif
-    Serial.println(F("Web server disabled."));
-    Serial.println(F("Ready."));
   #endif
+  #ifdef JTAG_SPARTAN6
+    jtagSetup();
+    jtag_idcode = jtagReadIDcode();
+    if (fsMounted) {
+      const String startupFpgaPath = F("/fpga_main.bit");
+      if (LittleFS.exists(startupFpgaPath)) {
+        File startupFpgaFile = LittleFS.open(startupFpgaPath, "r");
+        if (startupFpgaFile) {
+          startupFpgaFile.close();
+          if (isBitstreamFilePath(currentFilePath)) {
+            Serial.println(F("File /fpga_main.bit found, configuring FPGA."));
+            jtagConfigure(startupFpgaPath);
+          }
+        }
+      } else {
+        Serial.println(F("File /fpga_main.bit not found, FPGA not configured!"));
+      }
+    }
+  #endif
+
+
+  listLittleFsEntries();
+  printFileInfo();
+  printSerialCommandsInfo();
+  Serial.println("");
+  startPlaybackFromStaging(resolveStartAddressForPath(currentFilePath));
+  Serial.println(F("Ready."));
 }
 
 // Main service loop for serial commands, HTTP handling, and playback.

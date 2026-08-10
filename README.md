@@ -42,6 +42,10 @@ I made a versatile EPROM simulator using the legacy GODIL 40 from [OHO electroni
 
 This version has a nice feature: It can be used as RAM emulator for 6264 or 62256 SRAMs; in this case, you may read back the RAM contents from host system. Used it to recover old programs from my very first computer, an Acorn ATOM from 1981, using the rom_adapter_2 circuit. See /pcb folder. 
 
+### MOJO FPGA Support
+
+Under construction: Using a MOJO V3 FPGA board as EPROM simulator. For MOJO-like boards with Xilinx XC9SLX9 FPGA, ensure the correct bitstream "fpga_main.bit" is present in file system. The bitstream is loaded into the FPGA during startup configuration via JTAG.
+
 ### OHO DY1 Support
 
 All modules support the OHO DY1 display, a 3-digit 7-segment LED module with SPI connection, handy for displaying short messages, IP numbers etc. You may omit the DY1 display and use serial monitoring instead (to get your IP number and to set password/SSID).
