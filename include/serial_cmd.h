@@ -30,13 +30,9 @@
 // ##############################################################################
 
 
-void printDivLine() {
-  Serial.println(F("-----------------------"));
-}
-
 void printIDcode() {
   Serial.println("");
-  Serial.println(F("------ FPGA Info ------"));
+  printCenteredSerial(F("FPGA Info"));
   Serial.printf("ID code: %08X\n", jtagReadIDcode() );
   Serial.print(F("(X4001093 for Xilinx XC6SLX9)\n"));
   getFPGAversion();
@@ -46,7 +42,7 @@ void printIDcode() {
 void printFileInfo() {
   const bool stagedExists = fsMounted && currentFilePath.length() > 0 && LittleFS.exists(currentFilePath);
   Serial.println("");
-  Serial.println(F("------ File Info ------"));
+  printCenteredSerial(F("File Info"));
   Serial.print(F("fsMounted: "));
   Serial.println(fsMounted ? F("true") : F("false"));
   Serial.print(F("stagedExists: "));
@@ -73,7 +69,7 @@ void listLittleFsEntries() {
   size_t entryCount = 0;
   size_t totalBytes = 0;
 
-  Serial.println(F("---- Directory Info ----"));
+  printCenteredSerial(F("Directory Info"));
   while (dir.next()) {
     const String path = normalizeFsPath(dir.fileName());
     const size_t bytes = dir.fileSize();
@@ -97,7 +93,7 @@ void listLittleFsEntries() {
 
 void printWebInfo() {
   Serial.println("");
-  Serial.println(F("------ WiFi Info ------"));
+  printCenteredSerial(F("WiFi Info"));
   Serial.print(F("Wi-Fi mode: "));
   Serial.println(wifiModeLabel);
   Serial.print(F("Wi-Fi STA SSID: "));
@@ -124,13 +120,13 @@ void printWebInfo() {
 // SERIAL COMMAND HELPER FUNCTIONS
 // ##############################################################################
                                                           
-
+// Hex dump 256 bytes from device starting at startAddr.
 void hexdumpInputBytes256(uint32_t startAddr) {
   #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
     startBlockTransfer(startAddr);
     for (uint16_t rowStart = 0; rowStart < 256; rowStart += 16) {
       char line[96];
-      int lineLen = snprintf(line, sizeof(line), "%08lX: ", static_cast<unsigned long>(startAddr + rowStart));
+      int lineLen = snprintf(line, sizeof(line), "%06X: ", static_cast<unsigned long>(startAddr + rowStart));
       for (uint8_t i = 0; i < 16; ++i) {
         const uint8_t value = inputByte();
         lineLen += snprintf(line + lineLen, sizeof(line) - lineLen, "%02X ", value);
@@ -147,33 +143,33 @@ void hexdumpInputBytes256(uint32_t startAddr) {
     }
     stopBlockTransfer();
   #else
-    Serial.println(F("ERROR: command j is only available in GODIL or JTAG mode."));
+    Serial.println(F("ERROR: command j is only available in GODIL or JTAG_SPARTAN6 mode."));
   #endif
 }
 
 void printSerialCommandsInfo() {
   Serial.println("");
-  Serial.println(F("--- Serial commands ---"));
+  printCenteredSerial(F("Serial Commands"));
   #ifdef JTAG_SPARTAN6
     Serial.println(F("c: config FPGA with last/staged file"));
   #endif
   Serial.println(F("d<start><CR>: hexdump 256 bytes from device"));
   Serial.println(F("e: erase EPROM"));
-  Serial.println(F("h: print web/status info and help text (this one)"));
+  Serial.println(F("h: print web/status info and this help text"));
   Serial.println(F("i: print file debug info"));
   Serial.println(F("l: list LittleFS directory entries"));
   Serial.println(F("t: test SPI transfer"));
   Serial.println(F("r: replay last/staged file (blocking)"));
-  Serial.println(F("-----------------------"));
+  printDivLine();
   Serial.println(F("j<filename,start,len><CR>: dump EPROM to file"));
   Serial.println(F("n<filename><CR>: set next serial upload filename"));
   Serial.println(F("u<lenLo><lenHi><data...><cksLo><cksHi>: framed serial upload"));
   Serial.println(F("(start/len accept decimal or 0x-prefixed hex)"));
   Serial.println(F("x: print \"Ready.\" for handshaking with serial uploader"));
-  Serial.println(F("-----------------------"));
+  printDivLine();
   Serial.println(F("w<ssid><CR>: set STA Wi-Fi SSID"));
   Serial.println(F("p<password><CR>: set STA Wi-Fi password"));
-  Serial.println(F("-----------------------"));
+  printDivLine();
 }  
 
 // Reads one serial byte with timeout to support robust framed transfers.
@@ -489,18 +485,18 @@ void processSerialCommands() {
   while (Serial.available() > 0) {
     const char cmd = static_cast<char>(Serial.read());
     switch (cmd) {
-        #ifdef JTAG_SPARTAN6
-          case 'c':
-          case 'C':
-            // config SPARTAN 6 FPGA via JTAG (only available in JTAG_SPARTAN6 mode)
-            Serial.write(' ');
-            #ifdef USE_DY1_DISPLAY
-              set_static_message(F("cfg"));
-            #endif
-            jtagConfigure(currentFilePath);
-            printIDcode();
-            set_rdy_message();
-            break;
+      #ifdef JTAG_SPARTAN6
+        case 'c':
+        case 'C':
+          // config SPARTAN 6 FPGA via JTAG (only available in JTAG_SPARTAN6 mode)
+          Serial.write(' ');
+          #ifdef USE_DY1_DISPLAY
+            set_static_message(F("cfg"));
+          #endif
+          jtagConfigure(currentFilePath);
+          printIDcode();
+          set_rdy_message();
+          break;
       #endif
       case 'e':
       case 'E':

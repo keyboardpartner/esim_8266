@@ -43,6 +43,31 @@
 #endif
 
 
+void printDivLine() {
+  Serial.println(F("----------------------------------------"));
+}
+
+// print centered text string with optional padding char to serial
+void printCenteredSerial(const String &text, char padChar = '-') {
+  const int totalWidth = 40;
+  const int textLength = text.length();
+  if (textLength >= totalWidth) {
+    Serial.println(text);
+    return;
+  }
+  const int padding = (totalWidth - textLength) / 2;
+  String line;
+  line.reserve(totalWidth);
+  for (int i = 0; i < padding; ++i) {
+    line += padChar;
+  }
+  line += text;
+  while (line.length() < totalWidth) {
+    line += padChar;
+  }
+  Serial.println(line);
+}
+
 #ifdef GODIL_SPI
   #define LATCH_PIN 15 // FPGA SPI /SS
   #define LED_SENDDATA 4
