@@ -19,6 +19,7 @@
 #include <LittleFS.h>
 #include <cstdlib>
 #include <cstdio>
+#include "global_vars.h" // for #defines
 
 // ESP8266 Pins for JTAG: 
 const int TCK_PIN = 5; // D1 / GPIO-5 (output)
@@ -206,13 +207,13 @@ void jtagConfigure(const String &config_file) {
   Serial.print( "Sending File: " );
   Serial.println( config_file );
 
-  Serial.println( "send JSHUTDOWN instruction" );
+  DPRINTLNF( "Send JSHUTDOWN instruction" );
   jtag_load_ir( XILINX_JSHUTDOWN_INSTR, XILINX_IR_LEN );
   for ( int i=0; i < 32; i++ ) {
      jtag_clk(0);  // stay at Run-Test/Idle state
   }
 
-  Serial.println( "send CFG_IN instruction" );
+  DPRINTLNF( "Send CFG_IN instruction" );
   jtag_load_ir( XILINX_CFG_IN_INSTR, XILINX_IR_LEN );
 
   // start from Run-Test/Idle state
@@ -224,32 +225,33 @@ void jtagConfigure(const String &config_file) {
   int tdi, tms, chunk_count = 0;
   Serial.print( "Progress: " );
   while ( f.available() ) {
-     int chunk_size = f.read(reinterpret_cast<uint8_t *>(buf), MAX_BUF_SIZE-1);
-     num_read_total += chunk_size;
-     boolean last_bit;
-     boolean last_chunk = (num_read_total==file_size);
-     for ( int j=0; j < chunk_size; j++ ) {    // for each byte of the chunk data
-       boolean last_byte = last_chunk && (j==chunk_size-1);
-       uint8_t data = buf[j];                  // get the next byte
-       for ( int i=0; i < 8; i++ ) {           // for each bit of the byte data
-         tdi = (data & 0x80) ? 1 : 0;          // get the MSB bit
-         data = data << 1;                     // shift-to-left
-         last_bit = last_byte && (i==7);       // check for the last bit
-         tms = ((i==7) && last_bit ) ? 1 : 0;  // goto Exit1-DR (1) or Shift-DR (0)
-         jtag_clk_data( tms , tdi );
-       }
-     }
-     if (chunk_count % 20 == 0) {
-        Serial.print(".");
-     }
-     chunk_count++;
+    int chunk_size = f.read(reinterpret_cast<uint8_t *>(buf), MAX_BUF_SIZE-1);
+    num_read_total += chunk_size;
+    boolean last_bit;
+    boolean last_chunk = (num_read_total==file_size);
+    for ( int j=0; j < chunk_size; j++ ) {    // for each byte of the chunk data
+      boolean last_byte = last_chunk && (j==chunk_size-1);
+      uint8_t data = buf[j];                  // get the next byte
+      for ( int i=0; i < 8; i++ ) {           // for each bit of the byte data
+        tdi = (data & 0x80) ? 1 : 0;          // get the MSB bit
+        data = data << 1;                     // shift-to-left
+        last_bit = last_byte && (i==7);       // check for the last bit
+        tms = ((i==7) && last_bit ) ? 1 : 0;  // goto Exit1-DR (1) or Shift-DR (0)
+        jtag_clk_data( tms , tdi );
+      }
+    }
+    delay(0); yield();
+    if (chunk_count % 16 == 0) {
+      Serial.print(".");
+    }
+    chunk_count++;
   }
   Serial.println(" Done.");
   // now in Exit1-DR state
   jtag_clk(1);  // goto Update-DR
   jtag_clk(0);  // goto Run-Test/Idle
 
-  Serial.println( "send JSTART instruction" );
+  DPRINTLNF("send JSTART instruction" );
   jtag_load_ir( XILINX_JSTART_INSTR, XILINX_IR_LEN );
 
   // toggle TCK for startup sequence
@@ -269,13 +271,6 @@ void jtagConfigure(const String &config_file) {
   Serial.println( str );
 }
 
-void jtagShowIDcode() {
-  Serial.println("");
-  Serial.println(F("------ FPGA Info ------"));
-  Serial.printf("ID code: %08X\n", jtagReadIDcode() );
-  Serial.print(F("(X4001093 for Xilinx XC6SLX9)\n"));
-  Serial.println(F("-----------------------"));
-}
 
 void jtagSetup() {
   // configure GPIO pins for JTAG link 
@@ -283,7 +278,6 @@ void jtagSetup() {
   pinMode( TMS_PIN, OUTPUT );
   pinMode( TDI_PIN, OUTPUT );
   delay(10);
-  jtagShowIDcode();
 }
 
 #endif // JTAG_SEND_H
