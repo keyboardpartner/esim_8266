@@ -2,9 +2,7 @@
 
 ### ESP8266 Project for PlatformIO or Arduino IDE
 
-![PCB Pic](https://github.com/keyboardpartner/esim_8266/blob/main/docs/Screenshot_web_interface.png width=100)
-
-<img src="https://github.com/keyboardpartner/esim_8266/blob/main/docs/Screenshot_web_interface.png" height="100">
+<img src="https://github.com/keyboardpartner/esim_8266/blob/main/docs/Screenshot_web_interface.png" height="240">
 
 Three versions available through #defines:
 
