@@ -42,7 +42,7 @@ New: now supports even older PEPS EPROM Simulator from c't 5/1985, page 85. This
 
 <img src="/docs/godil.jpg" width="320">
 
-I made a versatile EPROM simulator using the legacy GODIL 40 from [OHO electronic](https://www.oho-elektronik.de/). These are legacy FPGA modules sold by [Trenz electronic](https://www.trenz-electronic.de/de), but you may still find them on the web. Supports EPROMs up to 27256 (32 KByte) due to mimitations of internal FPGA BRAMs. 
+I made a versatile EPROM simulator using the legacy GODIL 40 from [OHO electronic](https://www.oho-elektronik.de/). These are legacy FPGA modules sold by [Trenz electronic](https://www.trenz-electronic.de/de), but you may still find them on the web. Supports EPROMs up to 27256 (32 KByte) due to limitations of internal FPGA BRAMs. 
 
 This version has a nice feature: It can be used as RAM emulator for 6264 or 62256 SRAMs; in this case, you may read back the RAM contents from host system. Used it to recover old programs from my very first computer, an Acorn ATOM from 1981, using the rom_adapter_2 circuit. See /pcb folder. 
 
@@ -52,9 +52,9 @@ This version has a nice feature: It can be used as RAM emulator for 6264 or 6225
 
 (Under construction)
 
-Using a MOJO V3 FPGA board as EPROM simulator allows for 64 KByte EPROMs and SRAMs, merely by using internal FPGA BRAMs.
+Using a MOJO V3 FPGA board as EPROM simulator allows for 64 KByte EPROMs and SRAMs, merely by using internal FPGA BRAMs. MOJO is a FPGA board from *embeddedmicro.com*, formerly advertized as "open source". Unfortunately, the manufacturer ceased operation, and documentation is sparse now. This is how not to do "open source"!
 
-MOJO is a FPGA board from embeddedmicro.com, formerly advertized as "open source". Unfortunately, the manufacturer ceased operation, and documentation is sparse. This is how not to do "open source". However, some cheap rip-offs are still available through Aliexpress. The original MOJO design is rather bad, using an AVR for (slowly!) uploading the configuration bitstream from an SPI flash via Master SelectMAP (instead of attaching the SPI flash direcly to FPGA; by blocking the FPGA, flashing would have been possible as well).
+However, some cheap rip-offs are still available through Aliexpress. The original MOJO design is rather bad, using an AVR for (slowly!) uploading the configuration bitstream from an SPI flash via *Master SelectMAP* mode (instead of attaching the SPI flash direcly to FPGA; by blocking the FPGA, flashing would have been possible as well).
 
 I once made a [MOJO BIT file Uploader for Windows](https://github.com/keyboardpartner/MOJO_uploader) that flashes the SPI memory, but here a different approach is used: I send the FPGA configuration through JTAG (pins available on MOJO SV1). So the FPGA configuration may be uploaded and selected by web interface on-the-fly. The AVR on MOJO board is blocked by permanent reset. My fast JTAG loader sends the 334 KByte bitstream file for FPGA XILINX XC6SLX9 from LittleFS in about 920 ms (instead of 3.4 seconds of known version from RSP, see below), which is even faster than the ill-fated MOJO approach.
 
