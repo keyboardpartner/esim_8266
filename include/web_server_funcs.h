@@ -1,4 +1,15 @@
 #pragma once
+// ################################################################################
+//
+//      #####  ####### ######  #     # ####### ######  
+//     #     # #       #     # #     # #       #     # 
+//     #       #       #     # #     # #       #     # 
+//      #####  #####   ######  #     # #####   ######  
+//           # #       #   #    #   #  #       #   #   
+//     #     # #       #    #    # #   #       #    #  
+//      #####  ####### #     #    #    ####### #     # 
+//                                                     
+// ################################################################################
 
 void redirectToRoot() {
   server.sendHeader("Location", "/", true);
@@ -283,6 +294,25 @@ bool loadStartAddressForFile(const String &filePath, uint32_t &startAddrOut) {
   return found;
 }
 
+// ################################################################################
+//
+//      #####  ####### ####### ####### ### #     #  #####   #####  
+//     #     # #          #       #     #  ##    # #     # #     # 
+//     #       #          #       #     #  # #   # #       #       
+//      #####  #####      #       #     #  #  #  # #  ####  #####  
+//           # #          #       #     #  #   # # #     #       # 
+//     #     # #          #       #     #  #    ## #     # #     # 
+//      #####  #######    #       #    ### #     #  #####   #####  
+//                                                                 
+// ################################################################################
+// Global settings file format:
+// last_filename=<last uploaded filename>
+// last_start=<last uploaded start address>
+// startup_fpga_path=<path to FPGA bitstream file>
+// sta_ssid=<Wi-Fi SSID for station mode>
+// sta_password=<Wi-Fi password for station mode>
+// ################################################################################
+
 bool saveGlobalSettings() {
   if (!fsMounted) {
     return false;
@@ -406,89 +436,6 @@ String formatAddressForInput(uint32_t addr) {
   return String(buf);
 }
 
-String buildFsDirectoryHtml() {
-  String html;
-  html.reserve(3200);
-  if (!fsMounted) {
-    html += F("<p>LittleFS is not mounted.</p>");
-    return html;
-  }
-
-  Dir dir = LittleFS.openDir("/");
-  bool any = false;
-
-  html += F("<table style='width:100%;border-collapse:collapse'>");
-  html += F("<thead><tr>");
-  html += F("<th style='text-align:left;border-bottom:1px solid #334155;padding:6px 8px'>Name</th>");
-  html += F("<th style='text-align:right;border-bottom:1px solid #334155;padding:6px 8px'>Size</th>");
-  html += F("<th style='text-align:left;border-bottom:1px solid #334155;padding:6px 8px'>Start (dec/0x)</th>");
-  html += F("<th style='text-align:left;border-bottom:1px solid #334155;padding:6px 8px'>Actions</th>");
-  html += F("</tr></thead><tbody>");
-
-  while (dir.next()) {
-    const String path = normalizeFsPath(dir.fileName());
-    if (path.endsWith(F(".ini"))) {
-      continue;
-    }
-
-    any = true;
-    const size_t bytes = dir.fileSize();
-    const String displayName = baseNameFromPath(path);
-    const String displayText = displayName.length() ? displayName : path;
-
-    html += F("<tr>");
-    html += F("<td style='padding:6px 8px;border-bottom:1px solid #1f2937'><a href='/download-file?path=");
-    html += urlEncodeComponent(path);
-    html += F("' style='color:#93c5fd;text-decoration:none'><code>");
-    html += htmlEscape(displayText);
-    html += F("</code></a></td>");
-    html += F("<td style='padding:6px 8px;text-align:right;border-bottom:1px solid #1f2937'>");
-    html += String(bytes);
-    html += F(" bytes</td>");
-
-    uint32_t startAddr = 0;
-    loadStartAddressForFile(path, startAddr);
-    html += F("<td style='padding:6px 8px;border-bottom:1px solid #1f2937'>");
-    html += F("<input name='start' type='text' value='");
-    html += htmlEscape(formatAddressForInput(startAddr));
-    html += F("' required form='stream_");
-    html += urlEncodeComponent(path);
-    html += F("' style='margin:0;padding:7px 9px;border-radius:8px;max-width:130px'>");
-    html += F("</td>");
-
-    html += F("<td style='padding:6px 8px;border-bottom:1px solid #1f2937;white-space:nowrap;vertical-align:middle'>");
-    html += F("<div class='actions'>");
-
-    if (isNonStreamableFilePath(path)) {
-      html += F("<button class='action-btn' type='button' disabled title='This file type is not streamable'>Invalid</button>");
-    } else {
-      html += F("<form id='stream_");
-      html += urlEncodeComponent(path);
-      html += F("' method='POST' action='/stream-file'>");
-      html += F("<input type='hidden' name='path' value='");
-      html += htmlEscape(path);
-      html += F("'><button class='action-btn' type='submit'>");
-      html += primaryActionLabelForPath(path);
-      html += F("</button></form>");
-    }
-
-    html += F("<form method='POST' action='/delete-file' onsubmit=\"return confirm('Delete file?');\">");
-    html += F("<input type='hidden' name='path' value='");
-    html += htmlEscape(path);
-    html += F("'><button class='action-btn' type='submit'>Delete</button></form>");
-
-    html += F("</div></td></tr>");
-  }
-
-  if (!any) {
-    html += F("<tr><td colspan='4' style='padding:8px;color:#94a3b8'>No files present.</td></tr>");
-  }
-
-  html += F("</tbody></table>");
-  return html;
-}
-
-
 String urlEncodeComponent(const String &input) {
   static const char *kHex = "0123456789ABCDEF";
   String encoded;
@@ -566,6 +513,22 @@ String jsonEscape(const String &input) {
   }
   return escaped;
 }
+
+
+// ################################################################################
+//
+//     #######  #####        ######  ### ######  
+//     #       #     #       #     #  #  #     # 
+//     #       #             #     #  #  #     # 
+//     #####    #####        #     #  #  ######  
+//     #             #       #     #  #  #   #   
+//     #       #     #       #     #  #  #    #  
+//     #        #####        ######  ### #     # 
+//                                                               
+// ################################################################################
+// For large directories, use sendFsDirectoryHtmlStreamed() 
+// ################################################################################
+                                       
 
 // Streams the current LittleFS directory table to keep heap usage low.
 void sendFsDirectoryHtmlStreamed() {
@@ -691,7 +654,21 @@ void sendFsDirectoryHtmlStreamed() {
   server.sendContent(F("</tbody></table>"));
 }
 
+
+// ################################################################################
+//
+//     ######  ####### ####### ####### 
+//     #     # #     # #     #    #    
+//     #     # #     # #     #    #    
+//     ######  #     # #     #    #    
+//     #   #   #     # #     #    #    
+//     #    #  #     # #     #    #    
+//     #     # ####### #######    #    
+//                                     
+// ################################################################################
 // Streams the uploader page in small chunks to avoid large temporary String allocations.
+// ################################################################################
+
 void handleRoot() {
   const String message = pendingMessage;
   pendingMessage = String();
@@ -1120,7 +1097,7 @@ void handleDumpEprom() {
   pendingMessage += F(" bytes).");
   redirectToRoot();
 #else
-  pendingMessage = F("EPROM dump is only available in GODIL mode.");
+  pendingMessage = F("EPROM dump is only available in FPGA mode.");
   redirectToRoot();
 #endif
 }
