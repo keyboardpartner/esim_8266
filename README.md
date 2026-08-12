@@ -8,7 +8,7 @@ Three versions available through #defines:
 
 ### ESIM Support
 
-<img src="https://github.com/keyboardpartner/esim_8266/blob/main/docs/esim.jpg" hwidth="320">
+<img src="https://github.com/keyboardpartner/esim_8266/blob/main/docs/esim.jpg" width="320">
 
 ESP8266 used as an upload tool for old ESIM EPROM Simulator from c't magazine, issue 9/1991 instead of obsolete Centronix port. Outputs stream of data to 74HC595 shift register. Pulls /STROBE low on each byte sent. Supports 2764 up tp 27512 EPROMs. Unfortunately, ESIM does not support setting a start address; uploads will always start at EPROM address 0x0000.
 
