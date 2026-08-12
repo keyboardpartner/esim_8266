@@ -61,32 +61,7 @@
 #include "dy1_display.h"
 
 ESP8266WebServer server(80);
-String wifiModeLabel = "AP";
-String wifiIpAddress = "192.168.4.1";
 
-String lastFilename;
-size_t lastFileBytes = 0;
-size_t totalBytesSent = 0;
-bool uploadInProgress = false;
-bool fsMounted = false;
-
-File uploadStagingFile;
-size_t stagedFileBytes = 0;
-size_t streamOffset = 0;
-String currentFilePath;
-String pendingSerialFilename;
-uint32_t webUploadStartAddr = 0;
-bool currentUploadStartArgInvalid = false;
-uint32_t lastUploadStartAddr = 0;
-String staSsid = String(kStaSsid);
-String staPassword = String(kStaPassword);
-
-bool currentUploadFsError = false;
-String pendingMessage;
-bool likelyFreshFsImage = false;
-String startupFpgaPath = "/fpga_main.bit";
-
-uint32_t fpgaVersion = 0;
 
 String htmlEscape(const String &input);
 String urlEncodeComponent(const String &input);
