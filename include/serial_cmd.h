@@ -33,7 +33,8 @@
 void printIDcode() {
   Serial.println("");
   printCenteredSerial(F("FPGA Info"));
-  Serial.printf("ID code: %08X\n", jtagReadIDcode() );
+  jtagIDcode = jtagReadIDcode();
+  Serial.printf("ID code: %08X\n", jtagIDcode);
   Serial.print(F("(X4001093 for Xilinx XC6SLX9)\n"));
   getFPGAversion();
   printDivLine();
@@ -126,7 +127,7 @@ void hexdumpInputBytes256(uint32_t startAddr) {
     startBlockTransfer(startAddr);
     for (uint16_t rowStart = 0; rowStart < 256; rowStart += 16) {
       char line[96];
-      int lineLen = snprintf(line, sizeof(line), "%06X: ", static_cast<unsigned long>(startAddr + rowStart));
+      int lineLen = snprintf(line, sizeof(line), "%06lX: ", static_cast<unsigned long>(startAddr + rowStart));
       for (uint8_t i = 0; i < 16; ++i) {
         const uint8_t value = inputByte();
         lineLen += snprintf(line + lineLen, sizeof(line) - lineLen, "%02X ", value);
@@ -447,6 +448,9 @@ void processSerialUploadCommand() {
   }
   lastFilename = baseNameFromPath(currentFilePath);
   lastUploadStartAddr = startAddr;
+  if (isBitstreamFilePath(currentFilePath)) {
+    startupFpgaPath = normalizeFsPath(currentFilePath);
+  }
   if (!saveGlobalSettings()) {
     Serial.println(F("ERROR: failed to save global settings."));
   }
@@ -490,10 +494,8 @@ void processSerialCommands() {
         case 'C':
           // config SPARTAN 6 FPGA via JTAG (only available in JTAG_SPARTAN6 mode)
           Serial.write(' ');
-          #ifdef USE_DY1_DISPLAY
-            set_static_message(F("cfg"));
-          #endif
-          jtagConfigure(currentFilePath);
+          set_static_message(F("cfg"));
+          jtagConfigure(startupFpgaPath);
           printIDcode();
           set_rdy_message();
           break;
@@ -552,9 +554,7 @@ void processSerialCommands() {
       case 'T':
         Serial.write(' ');
         testSPItransfer();
-        #ifdef USE_DY1_DISPLAY
-          test_display();
-        #endif
+        test_display();
         set_rdy_message();
         Serial.println(F("Ready."));
        break;

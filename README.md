@@ -42,9 +42,17 @@ I made a versatile EPROM simulator using the legacy GODIL 40 from [OHO electroni
 
 This version has a nice feature: It can be used as RAM emulator for 6264 or 62256 SRAMs; in this case, you may read back the RAM contents from host system. Used it to recover old programs from my very first computer, an Acorn ATOM from 1981, using the rom_adapter_2 circuit. See /pcb folder. 
 
-### MOJO FPGA Support
+### MOJO V3 FPGA Support
 
-Under construction: Using a MOJO V3 FPGA board as EPROM simulator. For MOJO-like boards with Xilinx XC9SLX9 FPGA, ensure the correct bitstream "fpga_main.bit" is present in file system. The bitstream is loaded into the FPGA during startup configuration via JTAG.
+(Under construction)
+
+Using a MOJO V3 FPGA board as EPROM simulator allows for 64 KByte EPROMs and SRAMs, merely by using internal FPGA BRAMs.
+
+MOJO is a FPGA board from embeddedmicro.com, formerly advertized as "open source". Unfortunately, the manufacturer ceased operation, and documentation is sparse. This is how not to do "open source". However, some cheap rip-offs are still available through Aliexpress. The MOJO design is rather bad, using an AVR for (slowly!) uploading the configuration bitstream from an SPI flash via Master SelectMAP (instead of attaching the SPI flash direcly to FPGA; by blocking the FPGA, flashing would have been possible as well).
+
+I made a BIT file player for Windows that flashes the SPI memory, but here a different approach is used: I send the FPGA configuration through JTAG (pins available on MOJO SV1). So the FPGA configuration may be uploaded and selected by web interface on-the-fly. The AVR on MOJO board is blocked by permanent reset. My fast JTAG loader sends the 334 KByte bitstream file for FPGA XILINX XC6SLX9 from LittleFS in about 920 ms (instead of 3.4 seconds of known version from RSP, see below), which is even faster than the ill-fated MOJO approach.
+
+For MOJO-like boards with Xilinx XC9SLX9 FPGA, ensure the correct bitstream (default "fpga_main.bit") is uploaded to file system. The bitstream is loaded into the FPGA during startup configuration via JTAG.
 
 ### OHO DY1 Support
 
@@ -55,3 +63,9 @@ All modules support the OHO DY1 display, a 3-digit 7-segment LED module with SPI
 For each version, I designed a one-layer PCB optimized for milling. Can be handled by JCLPCB, though. There are also designs for ROM/RAM adaptors. See /pcb folder. 
 
 PCB design done with EasyPC from NumberOne Systems.
+
+Useful links:
+
+[MOJO v3 Bootloader and firmware](https://github.com/embmicro/mojo-bootloader/blob/master/Caterina.c)
+
+[JTAG Player for ESP8266](https://github.com/rsp-esl/esp8266_jtag_fpga) (slow, as mentioned above)

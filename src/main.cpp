@@ -84,6 +84,7 @@ String staPassword = String(kStaPassword);
 bool currentUploadFsError = false;
 String pendingMessage;
 bool likelyFreshFsImage = false;
+String startupFpgaPath = "/fpga_main.bit";
 
 uint32_t fpgaVersion = 0;
 
@@ -192,7 +193,7 @@ void setup() {
     SPI.setFrequency(4000000);
     SPI.setDataMode(SPI_MODE0);
     SPI.setBitOrder(MSBFIRST);
- #endif
+  #endif
 
   #ifdef USE_DY1_DISPLAY
     clear_disp(0);
@@ -244,9 +245,7 @@ void setup() {
     }
   }
   #ifdef USE_WEB_SERVER
-    #ifdef USE_DY1_DISPLAY
-      set_static_message(F("con"));
-    #endif
+    set_static_message(F("con"));
     serverInit();
     #ifdef USE_DY1_DISPLAY
       // display IP address on the 3-digit 7-segment display for a few seconds.
@@ -263,23 +262,19 @@ void setup() {
     #endif
     printWebInfo();
   #else
-    #ifdef USE_DY1_DISPLAY
-      set_static_message(F("off"));
-    #endif
+    set_static_message(F("off"));
   #endif
 
   #ifdef GODIL_SPI
     getFPGAversion();
   #endif
   #ifdef JTAG_SPARTAN6
-    jtagSetup();
     if (fsMounted) {
-      const String startupFpgaPath = F("/fpga_main.bit");
       if (LittleFS.exists(startupFpgaPath)) {
         File startupFpgaFile = LittleFS.open(startupFpgaPath, "r");
         if (startupFpgaFile) {
           startupFpgaFile.close();
-           if (isBitstreamFilePath(startupFpgaPath)) {
+          if (isBitstreamFilePath(startupFpgaPath)) {
             #ifdef USE_DY1_DISPLAY
               set_static_message(F("cfg"));
             #endif
@@ -293,7 +288,9 @@ void setup() {
           set_static_message(F("Err"));
           delay(1000); 
         #endif
-        Serial.println(F("File /fpga_main.bit not found, FPGA not configured!"));
+        Serial.print(F("File "));
+        Serial.print(startupFpgaPath);
+        Serial.println(F(" not found, FPGA not configured!"));
       }
     }
   #endif

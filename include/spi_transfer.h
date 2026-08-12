@@ -129,9 +129,7 @@ void setUpSendLed(bool on) {
       return false;
     }
 
-    #ifdef USE_DY1_DISPLAY
-      set_static_message(F("dep"));
-    #endif
+    set_static_message(F("dep"));
     LittleFS.remove(filename);
     File outFile = LittleFS.open(filename, "w");
     if (!outFile) {
@@ -166,9 +164,7 @@ void setUpSendLed(bool on) {
   void testSPItransfer() {
     // Write test pattern to internal registers and read back to verify correctness.
     Serial.println(F("Testing SPI transfer to FPGA BRAM..."));
-    #ifdef USE_DY1_DISPLAY
-      set_static_message(F("tst"));
-    #endif
+    set_static_message(F("tst"));
     uint8_t vals_written[16];
     uint32_t start_addr = 0x0400;
     startBlockTransfer(start_addr);
@@ -336,9 +332,7 @@ void setUpSendLed(bool on) {
 
 void eraseEPROM() {
   Serial.println(F("Erasing EPROM..."));
-  #ifdef USE_DY1_DISPLAY
-    set_static_message(F("Ers"));
-  #endif
+  set_static_message(F("Ers"));
   startBlockTransfer(0);
   for (uint32_t i = 0; i < maxBytesToTransfer; ++i) {
     outputByte(0x00);

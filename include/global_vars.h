@@ -103,7 +103,7 @@ void printCenteredSerial(const String &text, char padChar = '-') {
   #include "jtag_send.h"
   constexpr const char *kApSsid = "SPARTAN 6 Uploader";
   constexpr uint32_t maxBytesToTransfer = 65536;
-  uint32_t jtag_idcode = 0;
+  uint32_t jtagIDcode = 0;
 #endif
 
 constexpr const char *kApPassword = "0000";
@@ -117,7 +117,6 @@ constexpr uint8_t kSerialAckByte = 0x06;
 constexpr uint8_t kSerialNakByte = 0x15;
 constexpr uint16_t kSerialAckChunkBytes = 128;
 constexpr const char *kGlobalSettingsPath = "/.settings.ini";
-constexpr const char *kLegacyGlobalSettingsPath = "/setting.ini";
 constexpr size_t kMaxGlobalSettingsBytes = 1024;
 
 

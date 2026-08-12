@@ -184,7 +184,7 @@ void warnIfLikelyFreshFilesystemImage() {
   while (dir.next()) {
     const String path = normalizeFsPath(dir.fileName());
 
-    if (path == kGlobalSettingsPath || path == kLegacyGlobalSettingsPath || path.endsWith(F(".ini"))) {
+    if (path == kGlobalSettingsPath || path.endsWith(F(".ini"))) {
       continue;
     }
 
@@ -297,6 +297,8 @@ bool saveGlobalSettings() {
   iniFile.println(lastFilename);
   iniFile.print(F("last_start="));
   iniFile.println(static_cast<unsigned long>(lastUploadStartAddr));
+  iniFile.print(F("startup_fpga_path="));
+  iniFile.println(startupFpgaPath);
   iniFile.print(F("sta_ssid="));
   iniFile.println(staSsid);
   iniFile.print(F("sta_password="));
@@ -313,8 +315,6 @@ bool loadGlobalSettings() {
   String settingsPath;
   if (LittleFS.exists(kGlobalSettingsPath)) {
     settingsPath = kGlobalSettingsPath;
-  } else if (LittleFS.exists(kLegacyGlobalSettingsPath)) {
-    settingsPath = kLegacyGlobalSettingsPath;
   } else {
     return false;
   }
@@ -358,6 +358,12 @@ bool loadGlobalSettings() {
         lastUploadStartAddr = parsed;
         loadedAnything = true;
       }
+    } else if (key == F("startup_fpga_path")) {
+      const String candidatePath = normalizeFsPath(value);
+      if (isValidFsPath(candidatePath) && isBitstreamFilePath(candidatePath)) {
+        startupFpgaPath = candidatePath;
+        loadedAnything = true;
+      }
     } else if (key == F("sta_ssid")) {
       staSsid = value;
       loadedAnything = true;
@@ -373,11 +379,9 @@ bool loadGlobalSettings() {
     staSsid = String(kStaSsid);
   }
 
-  // Migrate legacy path to hidden reserved settings path to avoid filename collisions.
-  if (settingsPath == kLegacyGlobalSettingsPath) {
-    saveGlobalSettings();
+  if (!isValidFsPath(startupFpgaPath) || !isBitstreamFilePath(startupFpgaPath)) {
+    startupFpgaPath = F("/fpga_main.bit");
   }
-
   return loadedAnything;
 }
 
@@ -513,7 +517,6 @@ String urlEncodeComponent(const String &input) {
 String htmlEscape(const String &input) {
   String escaped;
   escaped.reserve(input.length() + 16);
-
   for (char c : input) {
     switch (c) {
       case '&':
@@ -533,7 +536,34 @@ String htmlEscape(const String &input) {
         break;
     }
   }
+  return escaped;
+}
 
+String jsonEscape(const String &input) {
+  String escaped;
+  escaped.reserve(input.length() + 16);
+  for (char c : input) {
+    switch (c) {
+      case '\\':
+        escaped += F("\\\\");
+        break;
+      case '"':
+        escaped += F("\\\"");
+        break;
+      case '\n':
+        escaped += F("\\n");
+        break;
+      case '\r':
+        escaped += F("\\r");
+        break;
+      case '\t':
+        escaped += F("\\t");
+        break;
+      default:
+        escaped += c;
+        break;
+    }
+  }
   return escaped;
 }
 
@@ -706,7 +736,19 @@ void handleRoot() {
   server.sendContent(F("' maxlength='10' style='max-width:11ch' required></td>"));
   server.sendContent(F("</tr></table>"));
   server.sendContent(F("<input id='uploadName' name='uploadName' type='hidden' value=''>"));
-  server.sendContent(F("<button id='uploadButton' type='submit'>Upload and stream</button></form>"));
+  server.sendContent(F("</form>"));
+  server.sendContent(F("<div class='upload-actions-row' style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'>"));
+  server.sendContent(F("<button id='uploadButton' type='submit' form='uploadForm'>Upload and stream</button>"));
+  server.sendContent(F("<form method='POST' action='/erase-eprom' style='margin:0' onsubmit=\"return confirm('Erase Device Memory now?');\">"));
+  server.sendContent(F("<button type='submit' style='background:#ef4444;color:#ffffff'>Erase Device Memory</button>"));
+  server.sendContent(F("</form>"));
+  server.sendContent(F("<form method='GET' action='/settings.html' style='margin:0'>"));
+  server.sendContent(F("<button type='submit' style='background:#f59e0b;color:#111827'>Edit defaults</button>"));
+  server.sendContent(F("</form>"));
+  server.sendContent(F("<form method='GET' action='/help.html' style='margin:0'>"));
+  server.sendContent(F("<button type='submit'>Help</button>"));
+  server.sendContent(F("</form>"));
+  server.sendContent(F("</div>"));
 
   #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6) 
     server.sendContent(F("<h3>Dump EPROM</h3>"));
@@ -719,10 +761,10 @@ void handleRoot() {
     server.sendContent(F("<button type='submit'>Dump EPROM</button></form>"));
   #endif
 
-  server.sendContent(F("<h2>Status</h2><ul>"));
+  server.sendContent(F("<h2>Status</h2><ul class='status-list'>"));
   server.sendContent(F("<li>Wi-Fi Mode: <code>"));
   server.sendContent(htmlEscape(wifiModeLabel));
-  server.sendContent(F("</code>, IP Address: <code>"));
+  server.sendContent(F("</code> IP Address: <code>"));
   server.sendContent(htmlEscape(wifiIpAddress));
   server.sendContent(F("</code></li>"));
   server.sendContent(F("<li>AP SSID: <code>"));
@@ -730,16 +772,19 @@ void handleRoot() {
   server.sendContent(F("</code></li>"));
   server.sendContent(F("<li>Last file: <code>"));
   server.sendContent(htmlEscape(lastFilename.length() ? lastFilename : String("none")));
-  server.sendContent(F("</code>, Size: <code>"));
+  server.sendContent(F("</code> Size: <code>"));
   server.sendContent(String(lastFileBytes));
-  server.sendContent(F("</code>, Start: <code>"));
-  server.sendContent(htmlEscape(formatAddressForInput(lastUploadStartAddr)));
+  server.sendContent(F("</code> Start: <code>"));
+  server.sendContent(formatAddressForInput(lastUploadStartAddr));
   server.sendContent(F("</code></li>"));
   #ifdef JTAG_SPARTAN6
+    server.sendContent(F("<li>FPGA Configuration: <code>"));
+    server.sendContent(startupFpgaPath);
+    server.sendContent(F("</code></li>"));
     server.sendContent(F("<li>FPGA ID code: <code>"));
-    server.sendContent(htmlEscape(formatAddressForInput(jtag_idcode)));
-    server.sendContent(F("</code>, version: <code>"));
-    server.sendContent(htmlEscape(formatAddressForInput(fpgaVersion)));
+    server.sendContent(formatAddressForInput(jtagIDcode));
+    server.sendContent(F("</code> Version: <code>"));
+    server.sendContent(formatAddressForInput(fpgaVersion));
     server.sendContent(F("</code></li>"));
   #endif
   server.sendContent(F("</ul>"));
@@ -758,19 +803,6 @@ void handleRoot() {
   server.sendContent(F("</div>"));
 
   sendFsDirectoryHtmlStreamed();
-
-  server.sendContent(F("<div style='margin-top:18px;padding-top:12px;border-top:1px solid #334155'>"));
-  server.sendContent(F("<div style='display:flex;gap:8px;align-items:center'>"));
-  server.sendContent(F("<form method='POST' action='/reset-settings' onsubmit=\"return confirm('Clear saved defaults?');\">"));
-  server.sendContent(F("<button type='submit' style='background:#f59e0b;color:#111827'>Clear saved defaults</button>"));
-  server.sendContent(F("</form>"));
-  server.sendContent(F("<form method='POST' action='/erase-eprom' onsubmit=\"return confirm('Device Memory now?');\">"));
-  server.sendContent(F("<button type='submit' style='background:#ef4444;color:#ffffff'>Erase Device Memory</button>"));
-  server.sendContent(F("</form>"));
-  server.sendContent(F("<form method='GET' action='/help.html'>"));
-  server.sendContent(F("<button type='submit'>Help</button>"));
-  server.sendContent(F("</form>"));
-  server.sendContent(F("</div></div>"));
 
   server.sendContent(F("<script>"));
   server.sendContent(F("(()=>{const form=document.getElementById('uploadForm');const btn=document.getElementById('uploadButton');const wait=document.getElementById('waitNotice');const live=document.getElementById('liveNotice');const fileInput=document.getElementById('binfile');const uploadName=document.getElementById('uploadName');if(!form||!btn||!wait||!live){return;}form.addEventListener('submit',()=>{if(uploadName&&fileInput&&fileInput.files&&fileInput.files[0]){uploadName.value=fileInput.files[0].name||'';}btn.disabled=true;btn.textContent='Uploading...';wait.style.display='block';});const tick=()=>{fetch('/status',{cache:'no-store'}).then(r=>r.json()).then(s=>{const stLast=document.getElementById('stLastFileBytes');const stProgress=document.getElementById('stProgress');const stTotal=document.getElementById('stTotalBytes');if(stLast){stLast.textContent=s.lastFileBytes;}if(stProgress){stProgress.textContent=s.streamOffset+' / '+s.stagedFileBytes;}if(stTotal){stTotal.textContent=s.totalBytesSent;}}).catch(()=>{});};tick();setInterval(tick,1000);})();"));
@@ -862,7 +894,7 @@ void handleStreamFile() {
     return;
   }
 
-  pendingMessage = stagedIsBitstream ? F("Selected file configured.") : F("Selected file sent.");
+  pendingMessage = stagedIsBitstream ? F("FPGA configured.") : F("Selected file streamed to device.");
   redirectToRoot();
 }
 
@@ -919,19 +951,86 @@ void handleResetSettings() {
     return;
   }
 
-  if (LittleFS.exists(kLegacyGlobalSettingsPath) && !LittleFS.remove(kLegacyGlobalSettingsPath)) {
-    pendingMessage = F("Failed to clear saved defaults.");
-    redirectToRoot();
-    return;
-  }
-
   lastFilename = String();
   lastUploadStartAddr = 0;
+  startupFpgaPath = F("/fpga_main.bit");
   webUploadStartAddr = 0;
   staSsid = String(kStaSsid);
   staPassword = String(kStaPassword);
   pendingMessage = F("Saved defaults cleared.");
   redirectToRoot();
+}
+
+void handleSettingsData() {
+  String json;
+  json.reserve(320);
+  json += F("{");
+  json += F("\"last_filename\":\"");
+  json += jsonEscape(lastFilename);
+  json += F("\",");
+  json += F("\"last_start\":\"");
+  json += jsonEscape(formatAddressForInput(lastUploadStartAddr));
+  json += F("\",");
+  json += F("\"startup_fpga_path\":\"");
+  json += jsonEscape(startupFpgaPath);
+  json += F("\",");
+  json += F("\"sta_ssid\":\"");
+  json += jsonEscape(staSsid);
+  json += F("\",");
+  json += F("\"sta_password\":\"");
+  json += jsonEscape(staPassword);
+  json += F("\"");
+  json += F("}");
+
+  server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  server.send(200, "application/json", json);
+}
+
+void handleSaveSettings() {
+  if (!fsMounted) {
+    server.sendHeader("Location", "/settings.html?err=LittleFS%20is%20not%20mounted", true);
+    server.send(303, "text/plain", "");
+    return;
+  }
+
+  String requestedLastFilename = server.hasArg("last_filename") ? server.arg("last_filename") : String();
+  String requestedLastStart = server.hasArg("last_start") ? server.arg("last_start") : String();
+  String requestedStartupPath = server.hasArg("startup_fpga_path") ? server.arg("startup_fpga_path") : String();
+  String requestedStaSsid = server.hasArg("sta_ssid") ? server.arg("sta_ssid") : String();
+  String requestedStaPassword = server.hasArg("sta_password") ? server.arg("sta_password") : String();
+
+  requestedStaSsid.trim();
+  requestedStaPassword.trim();
+  requestedStartupPath = normalizeFsPath(requestedStartupPath);
+
+  uint32_t parsedStart = 0;
+  if (!parseUnsignedValue(requestedLastStart, parsedStart)) {
+    server.sendHeader("Location", "/settings.html?err=Invalid%20last_start%20value", true);
+    server.send(303, "text/plain", "");
+    return;
+  }
+
+  if (!isValidFsPath(requestedStartupPath) || !isBitstreamFilePath(requestedStartupPath)) {
+    server.sendHeader("Location", "/settings.html?err=Invalid%20startup_fpga_path%20value", true);
+    server.send(303, "text/plain", "");
+    return;
+  }
+
+  const size_t maxNameLen = (kMaxFsPathLength > 1) ? (kMaxFsPathLength - 1) : 1;
+  lastFilename = fitFilenameToLength(sanitizeUploadFilename(requestedLastFilename), maxNameLen);
+  lastUploadStartAddr = parsedStart;
+  startupFpgaPath = requestedStartupPath;
+  staSsid = requestedStaSsid;
+  staPassword = requestedStaPassword;
+
+  if (!saveGlobalSettings()) {
+    server.sendHeader("Location", "/settings.html?err=Failed%20to%20save%20.settings.ini", true);
+    server.send(303, "text/plain", "");
+    return;
+  }
+
+  server.sendHeader("Location", "/settings.html?saved=1", true);
+  server.send(303, "text/plain", "");
 }
 
 void handleEraseEprom() {
@@ -1073,9 +1172,7 @@ void handleUpload() {
 
   if (upload.status == UPLOAD_FILE_START) {
     setUploadLed(true);
-    #ifdef USE_DY1_DISPLAY
-      set_static_message(F("upl"));
-    #endif
+    set_static_message(F("upl"));
     currentUploadFsError = false;
 
     DPRINT(F("Upload start: "));
@@ -1173,6 +1270,9 @@ void handleUploadDone() {
   } else {
     currentUploadStartArgInvalid = false;
     webUploadStartAddr = 0;
+    if (isBitstreamFilePath(currentFilePath)) {
+      startupFpgaPath = normalizeFsPath(currentFilePath);
+    }
     if (!server.hasArg("start") || !parseUnsignedValue(server.arg("start"), webUploadStartAddr)) {
       currentUploadStartArgInvalid = true;
       message = F("Upload failed: invalid start address.");
@@ -1190,6 +1290,9 @@ void handleUploadDone() {
       if (message.length() == 0) {
         lastFilename = baseNameFromPath(currentFilePath);
         lastUploadStartAddr = webUploadStartAddr;
+        if (isBitstreamFilePath(currentFilePath)) {
+          startupFpgaPath = normalizeFsPath(currentFilePath);
+        }
         if (!saveGlobalSettings()) {
           message = F("Upload failed: could not save global settings.");
           pendingMessage = message;
@@ -1275,7 +1378,10 @@ void serverInit() {
   server.on("/", HTTP_GET, handleRoot);
   server.serveStatic("/style.css", LittleFS, "/style.css", "max-age=300");
   server.serveStatic("/help.html", LittleFS, "/help.html", "max-age=300");
+  server.serveStatic("/settings.html", LittleFS, "/settings.html", "max-age=300");
   server.on("/status", HTTP_GET, handleStatus);
+  server.on("/settings-data", HTTP_GET, handleSettingsData);
+  server.on("/save-settings", HTTP_POST, handleSaveSettings);
   server.on("/download-file", HTTP_GET, handleDownloadFile);
   server.on("/stream-file", HTTP_POST, handleStreamFile);
   server.on("/delete-file", HTTP_POST, handleDeleteFile);

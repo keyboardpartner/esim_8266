@@ -30,11 +30,10 @@ bool startPlaybackFromStaging(uint32_t startAddr) {
 
   #ifdef JTAG_SPARTAN6
     if (isBitstreamFilePath(currentFilePath)) {
-      #ifdef USE_DY1_DISPLAY
-        set_static_message(F("cfg"));
-      #endif
+      set_static_message(F("cfg"));
       jtagConfigure(currentFilePath);
-      getFPGAversion();
+      printIDcode();
+      set_rdy_message();
       return true;
     }
   #endif
@@ -63,9 +62,7 @@ bool startPlaybackFromStaging(uint32_t startAddr) {
 
   streamOffset = 0;
   setUpSendLed(true);
-  #ifdef USE_DY1_DISPLAY
-    set_static_message(F("rpl"));
-  #endif
+  set_static_message(F("rpl"));
   
   startBlockTransfer(startAddr);
   while (playbackFile.available()) {

@@ -1,10 +1,33 @@
 #ifndef JTAG_SEND_H
 #define JTAG_SEND_H
-//////////////////////////////////////////////////////////////////////////
-// Author: RSP @ Embedded Systems Lab (ESL), KMUTNB, Bangkok / Thailand
+
+// ##############################################################################
+//
+//           # #######    #     #####      #####  ####### #     # ######  
+//           #    #      # #   #     #    #     # #       ##    # #     # 
+//           #    #     #   #  #          #       #       # #   # #     # 
+//           #    #    #     # #  ####     #####  #####   #  #  # #     # 
+//     #     #    #    ####### #     #          # #       #   # # #     # 
+//     #     #    #    #     # #     #    #     # #       #    ## #     # 
+//      #####     #    #     #  #####      #####  ####### #     # ######  
+//                                                                        
+// ##############################################################################
+// SEND JTAG CONFIGURATION FROM LITTLEFS
+// ##############################################################################
+
+// Optimized for speed on ESP8266 using direct GPIO register access and faster loops 
+// by Carsten Meyer 7/2026, info@keyboardpartner.de
+// Brought down configuration time for a 334 KByte bitstream from 3.4 seconds to 921 ms (!) on ESP8266
+
+// Note: It might be possible to speed up even more using the SPI for shifting out the data
+// stream bytes. However, behaviour of the SPI pins on ESP8266 on begin()/end() is not determined
+// and might be unstable, so we stick to bit-banging for now.
+
+// Note that the pins used here for bit banging are easy accessible on the ESP8266.
+// GPIO16 (User/D0) does not map to the standard GPOS/GPOC registers and cannot use this method.
+
+// Based on a sketch by RSP @ Embedded Systems Lab (ESL), KMUTNB, Bangkok / Thailand
 // Date: 2017-07-06
-// Arduino IDE: v1.8.2 + esp8266 v2.3.0
-// MCU Boards with ESP-12E
 // Objective: This sketch shows how to use an ESP8266 module to
 //   configure the Xilinx Spartan-6 FPGA device using the JTAG port.
 //   The bitstream file ("TOP.BIN") and its associated MD5 checksum file ("TOP.MD5")
@@ -12,14 +35,12 @@
 //   The MD5 checksum calculation is performed first before loading the bitstream.
 //   This sketch can successfully load the bitstream into the Xilinx Spartan 6SLX9
 //   FPGA device on the Mojo v3 board.
-//////////////////////////////////////////////////////////////////////////
-
 
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <cstdlib>
 #include <cstdio>
-#include "global_vars.h" // for #defines
+#include "global_vars.h" // for some #defines
 
 // ESP8266 Pins for JTAG: 
 const int TCK_PIN = 5; // D1 / GPIO-5 (output)
@@ -27,166 +48,141 @@ const int TDO_PIN = 4; // D2 / GPIO-4 (input)
 const int TDI_PIN = 0; // D3 / GPIO-0 (output)
 const int TMS_PIN = 2; // D4 / GPIO-2 (output)
 
-#define XILINX_SPARTAN6
-#define USE_FAST_IO
-#define MAX_BUF_SIZE   (2048)
+#define MAX_BUF_SIZE (4096)
 
-// global variables
-char sbuf[64];
 boolean config_fpga = false;
-char buf[MAX_BUF_SIZE];
 
-#ifdef XILINX_SPARTAN6
- // see: Spartan-6 FPGA Configuration User Guide UG380 (v2.10) March 31, 2017
- #define XILINX_IR_LEN             (6)
- #define XILINX_USER1_INSTR        (0x02)  // 000010
- #define XILINX_USER2_INSTR        (0x03)  // 000011
- #define XILINX_USER3_INSTR        (0x1A)  // 011010
- #define XILINX_USER4_INSTR        (0x1B)  // 011011
- #define XILINX_CFG_OUT_INSTR      (0x04)  // 000100
- #define XILINX_CFG_IN_INSTR       (0x05)  // 000101
- #define XILINX_BYPASS_INSTR       (0x1F)  // 111111
- #define XILINX_IDCODE_INSTR       (0x09)  // 001001
- #define XILINX_USERCODE_INSTR     (0x08)  // 001000
- #define XILINX_JPROGRAM_INSTR     (0x0B)  // 001011
- #define XILINX_JSTART_INSTR       (0x0C)  // 001100
- #define XILINX_JSHUTDOWN_INSTR    (0x0D)  // 001101 
- #define XILINX_S6LX9_IDCODE       (0x04001093)  // Spartan-6 LX9 FPGA device ID code
-#endif
+// union of 8 and 32 bit buffer for faster access -- does not pay due to wrong byte order
+// union {
+//   uint8_t bytes[MAX_BUF_SIZE];
+//   uint32_t words[MAX_BUF_SIZE / 4];
+// } buffer;
 
-///////////////////////////////////////////////////////////////////////
+uint8_t buf[MAX_BUF_SIZE];
 
-#ifdef USE_FAST_IO
+// see: Spartan-6 FPGA Configuration User Guide UG380 (v2.10) March 31, 2017
+#define XILINX_IR_LEN             (6)
+#define XILINX_USER1_INSTR        (0x02)  // 000010
+#define XILINX_USER2_INSTR        (0x03)  // 000011
+#define XILINX_USER3_INSTR        (0x1A)  // 011010
+#define XILINX_USER4_INSTR        (0x1B)  // 011011
+#define XILINX_CFG_OUT_INSTR      (0x04)  // 000100
+#define XILINX_CFG_IN_INSTR       (0x05)  // 000101
+#define XILINX_BYPASS_INSTR       (0x1F)  // 111111
+#define XILINX_IDCODE_INSTR       (0x09)  // 001001
+#define XILINX_USERCODE_INSTR     (0x08)  // 001000
+#define XILINX_JPROGRAM_INSTR     (0x0B)  // 001011
+#define XILINX_JSTART_INSTR       (0x0C)  // 001100
+#define XILINX_JSHUTDOWN_INSTR    (0x0D)  // 001101 
+#define XILINX_S6LX9_IDCODE       (0x04001093)  // Spartan-6 LX9 FPGA device ID code
 
-inline void jtag_clk( int tms ) {
-  GPOC = (1<<TCK_PIN);
-  if ( tms ) 
-    GPOS = (1<<TMS_PIN);
-  else
-    GPOC = (1<<TMS_PIN);
-  GPOS = (1<<TCK_PIN);
-}
 
-inline int jtag_clk_data( int tms, int tdi ) {
-  GPOC = (1<<TCK_PIN);  
-  if ( tdi ) 
-    GPOS = (1<<TDI_PIN);
-  else
-    GPOC = (1<<TDI_PIN);
-  if ( tms ) 
-    GPOS = (1<<TMS_PIN);
-  else
-    GPOC = (1<<TMS_PIN);
-  GPOS = (1<<TCK_PIN);  
-  return (GPI >> TDO_PIN) & 1;
-}
+// ##############################################################################
+//
+//     #     # ####### #       ######  ####### ######   #####  
+//     #     # #       #       #     # #       #     # #     # 
+//     #     # #       #       #     # #       #     # #       
+//     ####### #####   #       ######  #####   ######   #####  
+//     #     # #       #       #       #       #   #         # 
+//     #     # #       #       #       #       #    #  #     # 
+//     #     # ####### ####### #       ####### #     #  #####  
+//                                                             
+// ##############################################################################
+// Optimized for speed on ESP8266 using direct GPIO register access
+// ##############################################################################
+
+// inline codes for bit banging the JTAG signals on ESP8266
+#define TMS_HIGH  GPOS = (1<<TMS_PIN)
+#define TMS_LOW   GPOC = (1<<TMS_PIN)
+#define TCK_HIGH  GPOS = (1<<TCK_PIN)
+#define TCK_LOW   GPOC = (1<<TCK_PIN)
+#define TDI_HIGH  GPOS = (1<<TDI_PIN)
+#define TDI_LOW   GPOC = (1<<TDI_PIN)
+
+#define TCK_PULSE  GPOC = (1<<TCK_PIN); GPOS = (1<<TCK_PIN)
 
 void jtag_goto_runtest_idle() {
-  GPOC = (1<<TCK_PIN);  
+  TCK_LOW;
+  TMS_HIGH;
   for ( int i=0; i < 8; i++ ) {
-     jtag_clk(1);
+    TCK_PULSE;
   }
-  jtag_clk(0);  // goto Run-Test/Idle
+  TMS_LOW;
+  TCK_PULSE;  // goto Run-Test/Idle
 }
-
-#else
-
-inline void jtag_clk( int tms ) {
-  digitalWrite( TCK_PIN, 0 );
-  digitalWrite( TMS_PIN, tms );
-  digitalWrite( TCK_PIN, 1 );
-}
-
-inline int jtag_clk_data( int tms, int tdi ) {
-  int tdo;
-  digitalWrite( TCK_PIN, 0 );
-  digitalWrite( TDI_PIN, tdi );
-  digitalWrite( TMS_PIN, tms ); // TMS must be stable before the rising edge of TCK
-  digitalWrite( TCK_PIN, 1 );
-  tdo = digitalRead( TDO_PIN );
-  return tdo;
-}
-
-void jtag_goto_runtest_idle() {
-  digitalWrite( TCK_PIN, 0 );
-  for ( int i=0; i < 10; i++ ) {
-     jtag_clk(1);
-  }
-  jtag_clk(0);  // goto Run-Test/Idle
-}
-#endif
-///////////////////////////////////////////////////////////////////////
 
 void jtag_load_ir( uint32_t instr, int ir_len ) {
-  int tdi, tms;
-
   // start from Run-Test/Idle state
-  jtag_clk(1);  // goto Select-DR-Scan
-  jtag_clk(1);  // goto Select-IR-Scan
-  jtag_clk(0);  // goto Capture-IR
-  jtag_clk(0);  // goto shift-IR
-
+  TMS_HIGH;
+  TCK_PULSE;  // goto Select-DR-Scan
+  TCK_PULSE;  // goto Select-IR-Scan
+  TMS_LOW;
+  TCK_PULSE;  // goto Capture-IR
+  TCK_PULSE;  // goto shift-IR
   for ( int i=0; i < ir_len; i++ ) {
-     tdi = (instr & 1);
-     tms = (i==(ir_len-1)) ? 1 : 0;
-     jtag_clk_data( tms, tdi ); // goto Exit1-IR or shift-DR
+     if (instr & 1) {
+       TDI_HIGH;
+     } else {
+       TDI_LOW;
+     }
+     if (i==(ir_len-1)) {
+       TMS_HIGH;
+     } else {
+       TMS_LOW;
+     }
+     TCK_PULSE; // goto Exit1-IR or shift-DR
      instr = (instr >> 1);
   }
-  jtag_clk(1);  // goto Update-IR
-  jtag_clk(0);  // goto Run-Test/Idle
+  TMS_HIGH;
+  TCK_PULSE;  // goto Update-IR
+  TMS_LOW;
+  TCK_PULSE;  // goto Run-Test/Idle
 }
 
-uint32_t jtagReadIDcode( ) {
-  int tdi, tms, tdo;
-  uint32_t idcode = 0;
-
-  jtag_goto_runtest_idle();
-  jtag_load_ir( XILINX_IDCODE_INSTR, XILINX_IR_LEN );
-
-  // start from Run-Test/Idle state
-  jtag_clk(1);  // goto Select-DR-Scan
-  jtag_clk(0);  // goto Capture-DR
-  jtag_clk(0);  // goto Shift-DR
-
-  // now in Shift-DR state
-  tdi = 0;
-  for ( int i=0; i < 32; i++ ) {
-     tms = (i==31) ? 1 : 0;
-     tdo = jtag_clk_data( tms, tdi ); // goto Exit1-DR or Shift-DR
-     idcode = (tdo << 31) | (idcode >> 1);
+void jtag_shift_last_byte(uint8_t data) {
+  // shift the last byte with TMS high on last bit
+  for ( int i=0; i < 8; i++ ) {           // for each bit of the byte data
+    if (i==7) {  // check for the last bit
+      TMS_HIGH;  // goto Exit1-DR on last bit
+    }     
+    if (data & 0x80) {
+      TDI_HIGH;
+    } else {
+      TDI_LOW;
+    }
+    data = data << 1;                     // shift-to-left
+    TCK_PULSE;
   }
-  // now in Exit1-DR state
-  jtag_clk(1);  // goto Update-DR
-  jtag_clk(0);  // goto Run-Test/Idle
-
-  return idcode;
 }
 
-boolean jtagCheckBitstreamFile(const String &config_file) {
-  String str;
-  boolean file_valid = false;
-  if ( LittleFS.exists(config_file.c_str()) ) {
-     File f = LittleFS.open( config_file.c_str(), "r" );
-     if ( f ) {
-       int bytes_read_total = 0;
-       str = "File size: ";
-       str += f.size();
-       Serial.println( str );
-       f.close();
-
-       str = "Number of bytes read: ";
-       str += bytes_read_total;
-       Serial.println( str ); 
-       file_valid = true;     
-     }
-  } 
-  else {
-    str = "Cannot open file (no existing): ";
-    str += config_file;
-    Serial.println( str );
+void jtag_shift_chunk(int chunk_size) {
+  // shift all bytes of the chunk with TMS low
+  for ( int j=0; j < chunk_size; j++) {    // for each 32 bit word of the chunk data
+    uint8_t data = buf[j];
+    uint8_t bit_state_old = ~(data & 0x80);
+    for ( int i=0; i < 8; i++ ) {           // for each bit of the byte data
+      uint8_t bit_state = (data & 0x80);
+      if (bit_state != bit_state_old) {
+        // set TDI only if the bit state has changed, otherwise we can skip it for speed
+        if (bit_state) {
+          TDI_HIGH;
+        } else {
+          TDI_LOW;
+        }
+      }
+      bit_state_old = bit_state;
+      data = data << 1;                     // shift-to-left
+      TCK_PULSE;
+    }
   }
-  return file_valid;
 }
+
+void jtag_shift_last_chunk(int chunk_size) {
+  jtag_shift_chunk(chunk_size - 1); // shift all but the last byte
+  // shift the last byte with TMS high on last bit
+  jtag_shift_last_byte(buf[chunk_size-1]);
+}
+
 
 // ############################################################################
 //
@@ -203,113 +199,122 @@ boolean jtagCheckBitstreamFile(const String &config_file) {
 // ############################################################################
 
 
+uint32_t jtagReadIDcode() {
+  int tdo;
+  uint32_t idcode = 0;
+  jtag_goto_runtest_idle();
+  jtag_load_ir( XILINX_IDCODE_INSTR, XILINX_IR_LEN );
+  // start from Run-Test/Idle state
+  TMS_HIGH;
+  TCK_PULSE;  // goto Select-DR-Scan
+  TMS_LOW;
+  TCK_PULSE;  // goto Capture-DR
+  TCK_PULSE;  // goto Shift-DR
+  // now in Shift-DR state
+  TDI_LOW;
+  TMS_LOW;
+  for ( int i=0; i < 32; i++ ) {
+    if (i==31) {
+      TMS_HIGH;  // goto Exit1-DR on last bit
+    }
+    TCK_PULSE;
+    tdo = (GPI >> TDO_PIN) & 1;
+    idcode = (tdo << 31) | (idcode >> 1); // shift MSB first
+  }
+  // now in Exit1-DR state
+  TMS_HIGH;
+  TCK_PULSE;  // goto Update-DR
+  TMS_LOW;
+  TCK_PULSE;  // goto Run-Test/Idle
+  return idcode;
+}
+
 void jtagConfigure(const String &config_file) {
   Serial.println();
   printCenteredSerial(F("FPGA Config"));
+  // configure GPIO pins for JTAG link 
+  pinMode( TCK_PIN, OUTPUT );
+  pinMode( TMS_PIN, OUTPUT );
+  pinMode( TDI_PIN, OUTPUT );
+  delay(10);
   int num_read_total = 0;
   String str;
   uint32_t ts = millis();
   
   File f = LittleFS.open(config_file.c_str(), "r");
   if (!f) {
-    str = "Cannot open bitstream file: ";
-    str += config_file;
-    Serial.println( str );
+    Serial.print(F("Cannot open bitstream file: "));
+    Serial.println(config_file);
     return;
   }
   int file_size = f.size();  // get file size (in bytes)
 
   // goto RunTest/Idle
   jtag_goto_runtest_idle();
-  Serial.print( "Sending File: " );
-  Serial.println( config_file );
+  Serial.print(F("Sending File: "));
+  Serial.println(config_file);
 
-  DPRINTLNF( "Send JSHUTDOWN instruction" );
+  // refer to page 171 UG380 Spartan-6 FPGA Configuration User Guide
+  DPRINTLNF( "Phase 1: Send JSHUTDOWN instruction" ); 
   jtag_load_ir( XILINX_JSHUTDOWN_INSTR, XILINX_IR_LEN );
   for ( int i=0; i < 32; i++ ) {
-     jtag_clk(0);  // stay at Run-Test/Idle state
+    TCK_PULSE;  // stay at Run-Test/Idle state
   }
 
-  DPRINTLNF( "Send CFG_IN instruction" );
+  DPRINTLNF( "Phase 5: Send CFG_IN instruction" );
   jtag_load_ir( XILINX_CFG_IN_INSTR, XILINX_IR_LEN );
 
   // start from Run-Test/Idle state
-  jtag_clk(1);  // goto Select-DR-Scan
-  jtag_clk(0);  // goto Capture-DR
-  jtag_clk(0);  // goto Shift-DR
+  TMS_HIGH; 
+  TCK_PULSE; // goto Select-DR-Scan
+  TMS_LOW;
+  TCK_PULSE; // goto Capture-DR
+  TCK_PULSE; // goto Shift-DR
+  DPRINTLNF( "Phase 9: Shift in datastream" );
 
-  // now in Shift-DR state
-  int tdi, tms, chunk_count = 0;
+  // now in Shift-DR state, TMS is still low, so we can shift in the data stream
+  int chunk_count = 0;
   Serial.print( "Progress: " );
+
   while ( f.available() ) {
-    int chunk_size = f.read(reinterpret_cast<uint8_t *>(buf), MAX_BUF_SIZE-1);
+    int chunk_size = f.read(buf, MAX_BUF_SIZE-1);
     num_read_total += chunk_size;
-    boolean last_bit;
-    boolean last_chunk = (num_read_total==file_size);
-    for ( int j=0; j < chunk_size; j++ ) {    // for each byte of the chunk data
-      boolean last_byte = last_chunk && (j==chunk_size-1);
-      uint8_t data = buf[j];                  // get the next byte
-      for ( int i=0; i < 8; i++ ) {           // for each bit of the byte data
-        tdi = (data & 0x80) ? 1 : 0;          // get the MSB bit
-        data = data << 1;                     // shift-to-left
-        last_bit = last_byte && (i==7);       // check for the last bit
-        tms = ((i==7) && last_bit ) ? 1 : 0;  // goto Exit1-DR (1) or Shift-DR (0)
-        jtag_clk_data( tms , tdi );
-      }
+    if (num_read_total==file_size) {
+      // last chunk, so we need to go to Exit1-DR state after the last bit
+      jtag_shift_last_chunk(chunk_size);
+    } else {
+      jtag_shift_chunk(chunk_size);
     }
-    delay(0); yield();
     if (chunk_count % 16 == 0) {
+      delay(0); yield();
       Serial.print(".");
     }
     chunk_count++;
   }
-  Serial.println(" Done.");
+  Serial.println(F(" Done."));
+  f.close();
+  
   // now in Exit1-DR state
-  jtag_clk(1);  // goto Update-DR
-  jtag_clk(0);  // goto Run-Test/Idle
+  TMS_HIGH;
+  TCK_PULSE;  // goto Update-DR
+  TMS_LOW;
+  TCK_PULSE;  // goto Run-Test/Idle
 
-  DPRINTLNF("send JSTART instruction" );
+  DPRINTLNF("Phase 15: Send JSTART instruction" );
   jtag_load_ir( XILINX_JSTART_INSTR, XILINX_IR_LEN );
 
   // toggle TCK for startup sequence
   for ( int i=0; i < 32; i++ ) {
-     jtag_clk(0);  // stay at Run-Test/Idle state
+    TCK_PULSE;  // stay at Run-Test/Idle state
   }
  
-  f.close();
-  
-  str = "Bitstream size: ";
-  str += num_read_total;
-  str += " bytes";
-  Serial.println( str );
-  str = "Configuration done in " ;
-  str += millis() - ts;
-  str += " msec";
-  Serial.println( str );
+  Serial.print(F("Bitstream size: "));
+  Serial.print(num_read_total);
+  Serial.println(F(" bytes"));
+  Serial.print(F("Configuration done in "));
+  Serial.print(millis() - ts);
+  Serial.println(F(" msec"));
   printDivLine();
-}
-
-// ##############################################################################
-//
-//      #####  ####### ####### #     # ######  
-//     #     # #          #    #     # #     # 
-//     #       #          #    #     # #     # 
-//      #####  #####      #    #     # ######  
-//           # #          #    #     # #       
-//     #     # #          #    #     # #       
-//      #####  #######    #     #####  #       
-//                                             
-// ##############################################################################
-// JTAG Port Setup
-// ##############################################################################
-
-
-void jtagSetup() {
-  // configure GPIO pins for JTAG link 
-  pinMode( TCK_PIN, OUTPUT );
-  pinMode( TMS_PIN, OUTPUT );
-  pinMode( TDI_PIN, OUTPUT );
-  delay(10);
 }
 
 #endif // JTAG_SEND_H

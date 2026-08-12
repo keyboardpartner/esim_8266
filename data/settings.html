@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Edit Defaults</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <div class="card">
+      <h1>Edit Defaults</h1>
+      <p class="muted">These values are stored in /.settings.ini.</p>
+
+      <div id="settingsMsg" class="msg" style="display:none"></div>
+
+      <form method="POST" action="/save-settings">
+        <label for="sta_ssid">STA SSID</label>
+        <input id="sta_ssid" name="sta_ssid" type="text">
+
+        <label for="sta_password">STA Password</label>
+        <input id="sta_password" name="sta_password" type="text">
+
+        <label for="last_filename">Last Filename</label>
+        <input id="last_filename" name="last_filename" type="text"
+          maxlength="63">
+
+        <label for="last_start">Last Start Address (dec or 0x...)</label>
+        <input id="last_start" name="last_start" type="text" required>
+
+        <label for="startup_fpga_path">Startup FPGA Path (.bit
+          Configuration)</label>
+        <input id="startup_fpga_path" name="startup_fpga_path" type="text"
+          required>
+      </form>
+
+      <div class="upload-actions-row" style="margin-top:8px; padding-top:12px">
+        <form method="POST" action="/save-settings">
+        <button type="submit">Save Defaults</button>
+        </form>
+        <form method="POST" action="/reset-settings"
+          onsubmit="return confirm('Clear saved defaults?');">
+          <button type="submit" style="background:#ef4444;color:#ffffff">Clear
+            Saved Defaults</button>
+        </form>
+        <form method="GET" action="/">
+          <button type="submit"
+            style="background:#334155;color:#e2e8f0">Back</button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+    (() => {
+      const msgEl = document.getElementById('settingsMsg');
+      const q = new URLSearchParams(location.search);
+      const err = q.get('err');
+      const saved = q.get('saved');
+
+      if (err) {
+        msgEl.textContent = err;
+        msgEl.className = 'msg wait';
+        msgEl.style.display = 'block';
+      } else if (saved === '1') {
+        msgEl.textContent = 'Defaults saved.';
+        msgEl.className = 'msg ok';
+        msgEl.style.display = 'block';
+      }
+
+      fetch('/settings-data', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((s) => {
+          document.getElementById('last_filename').value = s.last_filename || '';
+          document.getElementById('last_start').value = s.last_start || '0x0';
+          document.getElementById('startup_fpga_path').value = s.startup_fpga_path || '/fpga_main.bit';
+          document.getElementById('sta_ssid').value = s.sta_ssid || '';
+          document.getElementById('sta_password').value = s.sta_password || '';
+        })
+        .catch(() => {
+          if (!msgEl.textContent) {
+            msgEl.textContent = 'Could not load current settings.';
+            msgEl.className = 'msg wait';
+            msgEl.style.display = 'block';
+          }
+        });
+    })();
+  </script>
+  </body>
+</html>

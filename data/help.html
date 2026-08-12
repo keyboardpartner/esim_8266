@@ -12,17 +12,21 @@
     <p class="muted">Quick reference for file upload, stream/config actions, and serial commands.</p>
 
     <h2>Web Upload</h2>
-    <div class="box">
-      <p>Select a file and start address, then click <code>Upload and stream</code>.</p>
-      <p>Supported picker extensions: <code>.bin</code>, <code>.bit</code>, <code>.rom</code>.</p>
-      <p>Files are staged in LittleFS first. You can then run actions from the file table.</p>
-    </div>
+    <ul class='status-list'>
+      <li>Select a file and start address, then click <code>Upload and stream</code>. Supported picker extensions: <code>.bin</code>, <code>.bit</code>, <code>.rom</code>.</li>
+      <li>Files are staged in LittleFS first; <code>.bin</code> and <code>.rom</code> files 
+      are automatically streamed to device via SPI.
+      FPGA configuration (<code>.bit</code>) files are sent to FPGA via JTAG (start address not relevant here).</li>
+      <li>You may also upload <code>.html</code> or <code>.css</code> files. These are not streamed, but stored in LittleFS as well.</li>
+      <li>You can later run actions from the file table.</li>
+    </ul>
 
     <h2>File Table Actions</h2>
     <ul>
       <li><code>Stream</code>: sends normal data files to the selected target starting at the given address.</li>
       <li><code>Config</code>: appears for <code>.bit</code> files and configures the FPGA via JTAG.</li>
       <li><code>Delete</code>: removes the file from LittleFS.</li>
+      <li>A click on the file name will offer it for download.</li>
     </ul>
 
     <h2>Serial Commands</h2>
@@ -39,7 +43,7 @@
 
     <h2>Troubleshooting</h2>
     <ul>
-      <li>For MOJO-like FPGA boards, ensure the correct bitstream "fpga_main.bit" is present in file system. 
+      <li>For MOJO-like FPGA boards, ensure the bitstream "fpga_main.bit" is present in file system. 
       The bitstream is loaded into the FPGA during startup configuration via JTAG.</li>
       <li>If upload fails, verify LittleFS is mounted and free space is available.</li>
       <li>If streaming/config fails, check file exists and is non-empty.</li>
