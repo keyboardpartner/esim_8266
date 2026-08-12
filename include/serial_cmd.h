@@ -32,13 +32,15 @@
 #include <Arduino.h>
 
 void printIDcode() {
-  Serial.println("");
-  printCenteredSerial(F("FPGA Info"));
-  jtagIDcode = jtagReadIDcode();
-  Serial.printf("ID code: %08X\n", jtagIDcode);
-  Serial.print(F("(X4001093 for Xilinx XC6SLX9)\n"));
-  getFPGAversion();
-  printDivLine();
+  #ifdef JTAG_SPARTAN6
+    Serial.println("");
+    printCenteredSerial(F("FPGA Info"));
+    jtagIDcode = jtagReadIDcode();
+    Serial.printf("ID code: %08X\n", jtagIDcode);
+    Serial.print(F("(X4001093 for Xilinx XC6SLX9)\n"));
+    getFPGAversion();
+    printDivLine();
+  #endif
 }
 
 void printFileInfo() {
@@ -122,32 +124,30 @@ void printWebInfo() {
 // SERIAL COMMAND HELPER FUNCTIONS
 // ##############################################################################
                                                           
-// Hex dump 256 bytes from device starting at startAddr.
+#if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
 void hexdumpInputBytes256(uint32_t startAddr) {
-  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
-    startBlockTransfer(startAddr);
-    for (uint16_t rowStart = 0; rowStart < 256; rowStart += 16) {
-      char line[96];
-      int lineLen = snprintf(line, sizeof(line), "%06lX: ", static_cast<unsigned long>(startAddr + rowStart));
-      for (uint8_t i = 0; i < 16; ++i) {
-        const uint8_t value = inputByte();
-        lineLen += snprintf(line + lineLen, sizeof(line) - lineLen, "%02X ", value);
-      }
-
-      if (lineLen > 0 && line[lineLen - 1] == ' ') {
-        line[lineLen - 1] = '\0';
-      }
-      Serial.println(line);
-
-      if ((rowStart & 0x007F) == 0) {
-        delay(0); yield();
-      }
+  // Hex dump 256 bytes from device starting at startAddr.
+  startBlockTransfer(startAddr);
+  for (uint16_t rowStart = 0; rowStart < 256; rowStart += 16) {
+    char line[96];
+    int lineLen = snprintf(line, sizeof(line), "%06lX: ", static_cast<unsigned long>(startAddr + rowStart));
+    for (uint8_t i = 0; i < 16; ++i) {
+      const uint8_t value = inputByte();
+      lineLen += snprintf(line + lineLen, sizeof(line) - lineLen, "%02X ", value);
     }
-    stopBlockTransfer();
-  #else
-    Serial.println(F("ERROR: command j is only available in GODIL or JTAG_SPARTAN6 mode."));
-  #endif
+
+    if (lineLen > 0 && line[lineLen - 1] == ' ') {
+      line[lineLen - 1] = '\0';
+    }
+    Serial.println(line);
+
+    if ((rowStart & 0x007F) == 0) {
+      delay(0); yield();
+    }
+  }
+  stopBlockTransfer();
 }
+#endif
 
 void printSerialCommandsInfo() {
   Serial.println("");
@@ -485,8 +485,9 @@ void processSerialCommands() {
   String hexdumpLine;
   String filename;
   String wifiValue;
-  static uint32_t startAddr = 0;
-  uint16_t len = 0;
+  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+    static uint32_t startAddr = 0;
+  #endif
   while (Serial.available() > 0) {
     const char cmd = static_cast<char>(Serial.read());
     switch (cmd) {
@@ -494,7 +495,7 @@ void processSerialCommands() {
         case 'c':
         case 'C':
           // config SPARTAN 6 FPGA via JTAG (only available in JTAG_SPARTAN6 mode)
-          Serial.write(' ');
+          Serial.write('\r');
           set_static_message(F("cfg"));
           jtagConfigure(startupFpgaPath);
           printIDcode();
@@ -503,12 +504,12 @@ void processSerialCommands() {
       #endif
       case 'e':
       case 'E':
-        Serial.write(' ');
+        Serial.write('\r');
         eraseEPROM();
         break;
       case 'r':
       case 'R':
-        Serial.write(' ');
+       Serial.print(F("\rReplay...  "));
         startPlaybackFromStaging(resolveStartAddressForPath(currentFilePath));
         break;
       case 'i':
@@ -517,21 +518,23 @@ void processSerialCommands() {
         break;
       case 'd':
       case 'D':
-        Serial.print(F(" Dump from addr: "));
-        if (!readSerialLine(hexdumpLine, kSerialUploadTimeoutMs * 25U)) {
-          Serial.write(kSerialNakByte);
-          Serial.println(F("ERROR: timeout while reading hexdump start address."));
-          break;
-        }
-        hexdumpLine.trim();
-        if (hexdumpLine.length() > 0 && !parseUnsignedValue(hexdumpLine, startAddr)) {
-          Serial.write(kSerialNakByte);
-          Serial.println(F("ERROR: invalid start address. Use decimal or 0x-prefixed hex."));
-          break;
-        }
+        #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+          Serial.print(F("\rDump from addr: "));
+          if (!readSerialLine(hexdumpLine, kSerialUploadTimeoutMs * 25U)) {
+            Serial.println(F("\rERROR: timeout while reading hexdump start address."));
+            break;
+          }
+          hexdumpLine.trim();
+          if (hexdumpLine.length() > 0 && !parseUnsignedValue(hexdumpLine, startAddr)) {
+            Serial.println(F("\rERROR: invalid start address. Use decimal or 0x-prefixed hex."));
+            break;
+          }
 
-        hexdumpInputBytes256(startAddr);
-        startAddr += 256;
+          hexdumpInputBytes256(startAddr);
+          startAddr += 256;
+        #else
+          Serial.println(F("\rERROR: command d is only available in FPGA mode."));
+        #endif
         break;
       case 'l':
       case 'L':
@@ -553,7 +556,7 @@ void processSerialCommands() {
         break;
       case 't':
       case 'T':
-        Serial.write(' ');
+        Serial.write('\r');
         testSPItransfer();
         test_display();
         set_rdy_message();
@@ -564,52 +567,45 @@ void processSerialCommands() {
         if (!readSerialFilename(filename)) {
           pendingSerialFilename = String();
           Serial.write(kSerialNakByte);
-          Serial.println(F("ERROR: timeout while reading filename."));
+          Serial.println(F("\rERROR: timeout while reading filename."));
         } else {
           pendingSerialFilename = filename;
           Serial.write(kSerialAckByte);
-          DPRINT(F("Serial filename accepted: "));
-          DPRINTLN(pendingSerialFilename);
         }
         break;
       case 'w':
       case 'W':
+        Serial.print(F("\rWi-Fi SSID="));
         if (!readSerialLine(wifiValue, kSerialUploadTimeoutMs * 25U)) {
-          Serial.write(kSerialNakByte);
-          Serial.println(F("ERROR: timeout while reading SSID."));
+          Serial.println(F("\rERROR: timeout while reading SSID."));
           continue;
         }
         wifiValue.trim();
         if (wifiValue.length() == 0) {
-          Serial.write(kSerialNakByte);
           Serial.println(F("ERROR: SSID must not be empty."));
           continue;
         }
         staSsid = wifiValue;
         if (!saveGlobalSettings()) {
-          Serial.write(kSerialNakByte);
-          Serial.println(F("ERROR: failed to save Wi-Fi SSID."));
+          Serial.println(F("\rERROR: failed to save Wi-Fi SSID."));
           continue;
         }
-        Serial.write(kSerialAckByte);
         Serial.print(F("Wi-Fi SSID saved: "));
         Serial.println(staSsid);
         break;
       case 'p':
       case 'P':
+        Serial.print(F("\rWi-Fi Password="));
         if (!readSerialLine(wifiValue, kSerialUploadTimeoutMs * 25U)) {
-          Serial.write(kSerialNakByte);
-          Serial.println(F("ERROR: timeout while reading password."));
+          Serial.println(F("\rERROR: timeout while reading password."));
           continue;
         }
         staPassword = wifiValue;
         if (!saveGlobalSettings()) {
-          Serial.write(kSerialNakByte);
-          Serial.println(F("ERROR: failed to save Wi-Fi password."));
+          Serial.println(F("\rERROR: failed to save Wi-Fi password."));
           continue;
         }
-        Serial.write(kSerialAckByte);
-        Serial.println(F("Wi-Fi password saved."));
+        Serial.println(F("\rWi-Fi password saved."));
         break;
       case 'u':
       case 'U':
@@ -618,27 +614,28 @@ void processSerialCommands() {
       case 'j':
       case 'J':
         #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+          uint16_t len = 0;
           if (!readSerialLine(dumpLine, kSerialUploadTimeoutMs * 25U)) {
             Serial.write(kSerialNakByte);
-            Serial.println(F("ERROR: timeout while reading dump arguments."));
+            Serial.println(F("\rERROR: timeout while reading dump arguments."));
             continue;
           }
 
           if (!parseDumpCommandArgs(dumpLine, filename, startAddr, len)) {
             Serial.write(kSerialNakByte);
-            Serial.println(F("ERROR: invalid dump syntax. Use d<filename,start,len><CR>"));
+            Serial.println(F("\rERROR: invalid dump syntax. Use d<filename,start,len><CR>"));
             continue;
           }
 
           if (uploadInProgress) {
             Serial.write(kSerialNakByte);
-            Serial.println(F("ERROR: dump blocked while upload is active."));
+            Serial.println(F("\rERROR: dump blocked while upload is active."));
             continue;
           }
 
           if (!writeEPROMtoFile(filename, startAddr, len)) {
             Serial.write(kSerialNakByte);
-            Serial.println(F("ERROR: EPROM dump failed."));
+            Serial.println(F("\rERROR: EPROM dump failed."));
             continue;
           }
 
@@ -653,11 +650,11 @@ void processSerialCommands() {
           Serial.println(len);
         #else
           Serial.write(kSerialNakByte);
-          Serial.println(F("ERROR: command d is only available in GODIL mode."));
+          Serial.println(F("\rERROR: command j is only available in FPGA mode."));
         #endif
         break;
       default:
-        Serial.print(F("ERROR: unknown serial command: "));
+        Serial.print(F("\rERROR: unknown serial command: "));
         Serial.println(cmd);
         printSerialCommandsInfo();
         break;

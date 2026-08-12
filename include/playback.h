@@ -18,6 +18,7 @@
 
 // Opens the staged file and sends it in one blocking pass.
 bool startPlaybackFromStaging(uint32_t startAddr) {
+  Serial.print(F("\rReplay...  "));
   if (!fsMounted || stagedFileBytes == 0 || currentFilePath.length() == 0 || !LittleFS.exists(currentFilePath)) {
     Serial.println(F("No file to send."));
     return false;
@@ -27,7 +28,6 @@ bool startPlaybackFromStaging(uint32_t startAddr) {
     Serial.println(F("Skipping playback: .css/.html files are not streamable."));
     return false;
   }
-
   #ifdef JTAG_SPARTAN6
     if (isBitstreamFilePath(currentFilePath)) {
       set_static_message(F("cfg"));
@@ -48,17 +48,17 @@ bool startPlaybackFromStaging(uint32_t startAddr) {
     return false;
   }
   size_t playbackBytesSent = 0;
-#if defined(DEBUG)
-  const uint32_t playbackStartMs = millis();
-  DPRINT(F("Playback start: file="));
-  DPRINT(currentFilePath);
-  DPRINT(F(", addr="));
-  DPRINT(startAddr);
-  DPRINT(F(" (0x"));
+
+  Serial.print(F("File: "));
+  Serial.print(currentFilePath);
+  Serial.print(F(", startAddr=0x"));
   Serial.print(startAddr, HEX);
-  DPRINT(F("), bytes="));
-  DPRINTLN(stagedFileBytes);
-#endif
+
+  #if defined(DEBUG)
+    const uint32_t playbackStartMs = millis();
+    DPRINT(F(", bytes="));
+    DPRINTLN(stagedFileBytes);
+  #endif
 
   streamOffset = 0;
   setUpSendLed(true);
@@ -83,7 +83,7 @@ bool startPlaybackFromStaging(uint32_t startAddr) {
   stopBlockTransfer();
 
   playbackFile.close();
-  Serial.println(F("Finished playback."));
+  Serial.println(F(" ...Done."));
 #if defined(DEBUG)
   const uint32_t elapsedMs = millis() - playbackStartMs;
   DPRINT(F("Playback done: file="));

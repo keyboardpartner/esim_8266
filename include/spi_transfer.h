@@ -229,7 +229,7 @@ void setUpSendLed(bool on) {
     #endif
     clearDataBus();
     do {
-      outputByte(0x35, 0);
+      outputByte(0x35);
       delay(1);
     } while (not Serial.available());
     Serial.println(F("Ready."));
@@ -331,16 +331,16 @@ void setUpSendLed(bool on) {
 #endif
 
 void eraseEPROM() {
-  Serial.println(F("Erasing EPROM..."));
+  Serial.print(F("Erasing EPROM... "));
   set_static_message(F("Ers"));
   startBlockTransfer(0);
   for (uint32_t i = 0; i < maxBytesToTransfer; ++i) {
-    outputByte(0x00);
+    outputByte(0xFF);
     if ((i & 0xFF) == 0) {
       delay(0); yield();
     }
   }
   stopBlockTransfer();
-  Serial.println(F("EPROM erase complete."));
+  Serial.println(F("Done."));
   set_rdy_message();
 }

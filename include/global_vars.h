@@ -18,7 +18,7 @@
 // Only one of the following three SPI modes can be enabled at a time. The others must be commented out.
 
 // uncomment to use ESIM EPROM simulator
-// #define ESIM_SPI
+#define ESIM_SPI
 
 // uncomment to use GODIL SPI Dual Port mode for RAM emulation
 // #define GODIL_SPI
@@ -27,7 +27,7 @@
 // #define PEPS_SPI
 
 // uncomment to use MOJO board with Spartan XC6SLX9 
-#define JTAG_SPARTAN6
+// #define JTAG_SPARTAN6
 
 #ifdef DEBUG
   #define DPRINT(...)    Serial.print(__VA_ARGS__)
@@ -119,5 +119,12 @@ constexpr uint16_t kSerialAckChunkBytes = 128;
 constexpr const char *kGlobalSettingsPath = "/.settings.ini";
 constexpr size_t kMaxGlobalSettingsBytes = 1024;
 
+enum WifiMode {
+  WifiMode_Unknown = 0,
+  WifiMode_STA,
+  WifiMode_AP
+};
+
+WifiMode currentWifiMode = WifiMode_Unknown;
 
 #endif  // GLOBALVARS_H

@@ -1367,11 +1367,13 @@ void serverInit() {
   if (WiFi.status() == WL_CONNECTED) {
     wifiModeLabel = F("STA");
     wifiIpAddress = WiFi.localIP().toString();
+    currentWifiMode = WifiMode_STA;
   } else {
     wifiModeLabel = F("AP (fallback from STA)");
     WiFi.mode(WIFI_AP);
     WiFi.softAP(kApSsid, kApPassword);
     wifiIpAddress = WiFi.softAPIP().toString();
+    currentWifiMode = WifiMode_AP;
     // Blink LED to indicate AP mode fallback due to STA connection failure.
     for (int i = 0; i < 10; ++i) {
       digitalWrite(LED_BUILTIN, HIGH);
@@ -1390,6 +1392,7 @@ void serverInit() {
   WiFi.softAP(kApSsid, kApPassword);
   wifiModeLabel = F("AP ");
   wifiIpAddress = WiFi.softAPIP().toString();
+  currentWifiMode = WifiMode_AP;
   digitalWrite(LED_BUILTIN, HIGH);
   delay(500);
   digitalWrite(LED_BUILTIN, LOW);

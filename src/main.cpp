@@ -249,9 +249,16 @@ void setup() {
     serverInit();
     #ifdef USE_DY1_DISPLAY
       // display IP address on the 3-digit 7-segment display for a few seconds.
-      for (int i = 0; i < 4; ++i) {
-        set_number(WiFi.localIP()[i], i == 3 ? -1 : 2); // Display the last octet of the IP address
-        delay(350);
+      if (currentWifiMode == WifiMode_STA) {
+        for (int i = 0; i < 4; ++i) {
+          set_number(WiFi.localIP()[i], i == 3 ? -1 : 2); // Display the last octet of the IP address
+          delay(350);
+        }
+      } else {
+        for (int i = 0; i < 4; ++i) {
+          set_number(WiFi.softAPIP()[i], i == 3 ? -1 : 2); // Display the last octet of the IP address
+          delay(350);
+        }
       }
       Serial.println(F("Server started."));
       delay(500); // additional delay to make the last digit visible for a bit longer
@@ -302,6 +309,7 @@ void setup() {
   if (!isBitstreamFilePath(currentFilePath)) {
     startPlaybackFromStaging(resolveStartAddressForPath(currentFilePath));
   }
+  set_rdy_message();
   Serial.println(F("Ready."));
 }
 
