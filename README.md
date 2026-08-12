@@ -8,7 +8,7 @@ For development of legacy computer systems and embedded controllers, an EPROM si
 
 ### ESIM Support
 
-<img src="https://github.com/keyboardpartner/esim_8266/blob/main/docs/esim.jpg" width="320">
+<img src="/docs/esim.jpg" width="320">
 
 ESP8266 used as an upload tool for old ESIM EPROM Simulator from c't magazine, issue 9/1991 instead of obsolete Centronix port. Outputs stream of data to 74HC595 shift register. Pulls /STROBE low on each byte sent. Supports 2764 up tp 27512 EPROMs. Unfortunately, ESIM does not support setting a start address; uploads will always start at EPROM address 0x0000.
 
@@ -40,15 +40,15 @@ New: now supports even older PEPS EPROM Simulator from c't 5/1985, page 85. This
 
 ### GODIL FPGA Support
 
-<img src="https://github.com/keyboardpartner/esim_8266/blob/main/docs/godil.jpg" width="320">
+<img src="/docs/godil.jpg" width="320">
 
-I made a versatile EPROM simulator using the legacy GODIL 40 from [OHO electronic](https://www.oho-elektronik.de/). See my other repositories. These are legacy FPGA modules sold by [Trenz electronic](https://www.trenz-electronic.de/de), but you may still find them on the web. Supports EPROMs up to 27256 (32 KByte). 
+I made a versatile EPROM simulator using the legacy GODIL 40 from [OHO electronic](https://www.oho-elektronik.de/). These are legacy FPGA modules sold by [Trenz electronic](https://www.trenz-electronic.de/de), but you may still find them on the web. Supports EPROMs up to 27256 (32 KByte) due to mimitations of internal FPGA BRAMs. 
 
 This version has a nice feature: It can be used as RAM emulator for 6264 or 62256 SRAMs; in this case, you may read back the RAM contents from host system. Used it to recover old programs from my very first computer, an Acorn ATOM from 1981, using the rom_adapter_2 circuit. See /pcb folder. 
 
 ### MOJO V3 FPGA Support
 
-<img src="https://github.com/keyboardpartner/esim_8266/blob/main/docs/mojo.jpg" width="320">
+<img src="/docs/mojo.jpg" width="320">
 
 (Under construction)
 
