@@ -79,16 +79,13 @@ uint32_t resolveStartAddressForPath(const String &path) {
   }
   return startAddr;
 }
+
 // SPI transfer and device I/O helpers are extracted to a dedicated header.
 #include "spi_transfer.h"
-
 // SERVER & WEB PAGES
 #include "web_server_funcs.h"
-
-
 // Serial command handlers and parsing helpers are extracted into a dedicated header.
 #include "serial_cmd.h"
-
 // Playback staged files
 #include "playback.h"
 
