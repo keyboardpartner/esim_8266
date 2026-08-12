@@ -487,6 +487,7 @@ void processSerialCommands() {
   String wifiValue;
   #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
     static uint32_t startAddr = 0;
+    uint16_t len = 0;
   #endif
   while (Serial.available() > 0) {
     const char cmd = static_cast<char>(Serial.read());
@@ -614,7 +615,6 @@ void processSerialCommands() {
       case 'j':
       case 'J':
         #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
-          uint16_t len = 0;
           if (!readSerialLine(dumpLine, kSerialUploadTimeoutMs * 25U)) {
             Serial.write(kSerialNakByte);
             Serial.println(F("\rERROR: timeout while reading dump arguments."));

@@ -18,12 +18,12 @@
       <li>Files are staged in LittleFS first; <code>.bin</code> and <code>.rom</code> files 
       are automatically streamed to device via SPI. You can later run actions from the file table.</li>
       <li>
-      FPGA configuration (<code>.bit</code>) files are sent to FPGA via JTAG (start address not relevant here).
+      FPGA configuration (<code>.bit</code>) files are sent to FPGA via JTAG (start address ignored).
       You may have a range of FPGA files for different EPROM/SRAM configurations.
       </li>
-      <li>You may also upload new <code>.html</code> or <code>.css</code> files. 
+      <li>You may also upload new <code>.html</code> or <code>.css</code> files (start address ignored). 
       These are not streamed, but stored in LittleFS as well for rendering the web page.</li>
-      <li><strong>Erase Device Memory</strong> fills EPROM simulator device with zeroes.</li>
+      <li><strong>Erase Device Memory</strong> fills EPROM simulator device with 0xFFs.</li>
       <li><strong>Edit Defaults</strong> allows editing the default settings for the EPROM simulator device and Wi-Fi credentials.</li>
     </ul>
 

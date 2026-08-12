@@ -18,7 +18,7 @@
 // Only one of the following three SPI modes can be enabled at a time. The others must be commented out.
 
 // uncomment to use ESIM EPROM simulator
-#define ESIM_SPI
+// #define ESIM_SPI
 
 // uncomment to use GODIL SPI Dual Port mode for RAM emulation
 // #define GODIL_SPI
@@ -27,7 +27,9 @@
 // #define PEPS_SPI
 
 // uncomment to use MOJO board with Spartan XC6SLX9 
-// #define JTAG_SPARTAN6
+#define JTAG_SPARTAN6
+
+constexpr const char *versionString = "0.91";
 
 #ifdef DEBUG
   #define DPRINT(...)    Serial.print(__VA_ARGS__)

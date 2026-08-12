@@ -148,8 +148,9 @@ void setup() {
   #ifdef JTAG_SPARTAN6
     pinMode(LATCH_PIN, OUTPUT);
     digitalWrite(LATCH_PIN, HIGH);
-    Serial.println(F("FPGA Binary Uploader by Carsten Meyer 7/2026"));
-    SPI.begin();
+    Serial.print(F("FPGA Binary Uploader by Carsten Meyer 7/2026 V. "));
+    Serial.println(versionString);
+   SPI.begin();
     SPI.setFrequency(10000000);
     SPI.setDataMode(SPI_MODE0);
     SPI.setBitOrder(MSBFIRST);
@@ -160,7 +161,8 @@ void setup() {
     digitalWrite(LED_UPLOAD, LOW);
     pinMode(LATCH_PIN, OUTPUT);
     digitalWrite(LATCH_PIN, HIGH);
-    Serial.println(F("GODIL Binary Uploader by Carsten Meyer 7/2026"));
+    Serial.print(F("GODIL Binary Uploader by Carsten Meyer 7/2026 V. "));
+    Serial.println(versionString);
     SPI.begin();
     SPI.setFrequency(10000000);
     SPI.setDataMode(SPI_MODE0);
@@ -172,7 +174,8 @@ void setup() {
     digitalWrite(LATCH_PIN, HIGH);
     pinMode(STROBE_PIN, OUTPUT);
     digitalWrite(STROBE_PIN, HIGH); 
-    Serial.println(F("ESIM Binary Uploader by Carsten Meyer 7/2026"));
+    Serial.print(F("ESIM Binary Uploader by Carsten Meyer 7/2026 V. "));
+    Serial.println(versionString);
     SPI.begin();
     SPI.setFrequency(10000000);
     SPI.setDataMode(SPI_MODE0);
@@ -188,7 +191,8 @@ void setup() {
     digitalWrite(M0_PIN, HIGH);
     pinMode(M1_PIN, OUTPUT);
     digitalWrite(M1_PIN, HIGH);
-    Serial.println(F("PEPS Binary Uploader by Carsten Meyer 7/2026"));
+    Serial.print(F("PEPS Binary Uploader by Carsten Meyer 7/2026 V. "));
+    Serial.println(versionString);
     SPI.begin();
     SPI.setFrequency(4000000);
     SPI.setDataMode(SPI_MODE0);

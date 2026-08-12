@@ -693,16 +693,24 @@ void handleRoot() {
   server.sendContent(F("<link rel='stylesheet' href='/style.css'></head><body><div class='card'>"));
 
   #ifdef GODIL_SPI
-    server.sendContent(F("<h1>GODIL Binary Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
+    server.sendContent(F("<h1>GODIL Binary Uploader</h1><h3>by KeyboardPartner 7/2026, V. "));
+    server.sendContent(versionString);
+    server.sendContent(F("</h3>"));
   #endif
   #ifdef ESIM_SPI
-    server.sendContent(F("<h1>ESIM Binary Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
+    server.sendContent(F("<h1>ESIM Binary Uploader</h1><h3>by KeyboardPartner 7/2026, V. "));
+    server.sendContent(versionString);
+    server.sendContent(F("</h3>"));
   #endif
   #ifdef PEPS_SPI
-    server.sendContent(F("<h1>PEPS Binary Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
+    server.sendContent(F("<h1>PEPS Binary Uploader</h1><h3>by KeyboardPartner 7/2026, V. "));
+    server.sendContent(versionString);
+    server.sendContent(F("</h3>"));
   #endif
   #ifdef JTAG_SPARTAN6
-    server.sendContent(F("<h1>XC6SLX9 FPGA JTAG Configurator and Uploader</h1><h3>by KeyboardPartner 7/2026</h3>"));
+    server.sendContent(F("<h1>XC6SLX9 FPGA JTAG Configurator and Uploader</h1><h3>by KeyboardPartner 7/2026, V. "));
+    server.sendContent(versionString);
+    server.sendContent(F("</h3>"));
   #endif
 
   server.sendContent(F("<form id='uploadForm' method='POST' action='/upload' enctype='multipart/form-data'>"));
