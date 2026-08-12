@@ -13,7 +13,7 @@
 
       <div id="settingsMsg" class="msg" style="display:none"></div>
 
-      <form method="POST" action="/save-settings">
+      <form id="settingsForm" method="POST" action="/save-settings">
         <label for="sta_ssid">STA SSID</label>
         <input id="sta_ssid" name="sta_ssid" type="text">
 
@@ -34,9 +34,7 @@
       </form>
 
       <div class="upload-actions-row" style="margin-top:8px; padding-top:12px">
-        <form method="POST" action="/save-settings">
-        <button type="submit">Save Defaults</button>
-        </form>
+        <button type="submit" form="settingsForm">Save Defaults</button>
         <form method="POST" action="/reset-settings"
           onsubmit="return confirm('Clear saved defaults?');">
           <button type="submit" style="background:#ef4444;color:#ffffff">Clear

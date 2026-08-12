@@ -761,6 +761,24 @@ void handleRoot() {
     server.sendContent(F("<button type='submit'>Dump EPROM</button></form>"));
   #endif
 
+  size_t fsTotalBytes = 0;
+  size_t fsUsedBytes = 0;
+  size_t fsFreeBytes = 0;
+  size_t fsTotalKiB = 0;
+  size_t fsUsedKiB = 0;
+  size_t fsFreeKiB = 0;
+  if (fsMounted) {
+    FSInfo fsInfo;
+    if (LittleFS.info(fsInfo)) {
+      fsTotalBytes = fsInfo.totalBytes;
+      fsUsedBytes = fsInfo.usedBytes;
+      fsFreeBytes = (fsTotalBytes >= fsUsedBytes) ? (fsTotalBytes - fsUsedBytes) : 0;
+      fsTotalKiB = fsTotalBytes / 1024;
+      fsUsedKiB = fsUsedBytes / 1024;
+      fsFreeKiB = fsFreeBytes / 1024;
+    }
+  }
+
   server.sendContent(F("<h2>Status</h2><ul class='status-list'>"));
   server.sendContent(F("<li>Wi-Fi Mode: <code>"));
   server.sendContent(htmlEscape(wifiModeLabel));
@@ -777,6 +795,13 @@ void handleRoot() {
   server.sendContent(F("</code> Start: <code>"));
   server.sendContent(formatAddressForInput(lastUploadStartAddr));
   server.sendContent(F("</code></li>"));
+  server.sendContent(F("<li>File System: <code id='stFsUsed'>"));
+  server.sendContent(String(fsUsedKiB));
+  server.sendContent(F("</code> KiB used, <code id='stFsFree'>"));
+  server.sendContent(String(fsFreeKiB));
+  server.sendContent(F("</code> KiB free, <code id='stFsTotal'>"));
+  server.sendContent(String(fsTotalKiB));
+  server.sendContent(F("</code> KiB total</li>"));
   #ifdef JTAG_SPARTAN6
     server.sendContent(F("<li>FPGA Configuration: <code>"));
     server.sendContent(startupFpgaPath);
@@ -805,7 +830,7 @@ void handleRoot() {
   sendFsDirectoryHtmlStreamed();
 
   server.sendContent(F("<script>"));
-  server.sendContent(F("(()=>{const form=document.getElementById('uploadForm');const btn=document.getElementById('uploadButton');const wait=document.getElementById('waitNotice');const live=document.getElementById('liveNotice');const fileInput=document.getElementById('binfile');const uploadName=document.getElementById('uploadName');if(!form||!btn||!wait||!live){return;}form.addEventListener('submit',()=>{if(uploadName&&fileInput&&fileInput.files&&fileInput.files[0]){uploadName.value=fileInput.files[0].name||'';}btn.disabled=true;btn.textContent='Uploading...';wait.style.display='block';});const tick=()=>{fetch('/status',{cache:'no-store'}).then(r=>r.json()).then(s=>{const stLast=document.getElementById('stLastFileBytes');const stProgress=document.getElementById('stProgress');const stTotal=document.getElementById('stTotalBytes');if(stLast){stLast.textContent=s.lastFileBytes;}if(stProgress){stProgress.textContent=s.streamOffset+' / '+s.stagedFileBytes;}if(stTotal){stTotal.textContent=s.totalBytesSent;}}).catch(()=>{});};tick();setInterval(tick,1000);})();"));
+  server.sendContent(F("(()=>{const form=document.getElementById('uploadForm');const btn=document.getElementById('uploadButton');const wait=document.getElementById('waitNotice');const live=document.getElementById('liveNotice');const fileInput=document.getElementById('binfile');const uploadName=document.getElementById('uploadName');if(!form||!btn||!wait||!live){return;}form.addEventListener('submit',()=>{if(uploadName&&fileInput&&fileInput.files&&fileInput.files[0]){uploadName.value=fileInput.files[0].name||'';}btn.disabled=true;btn.textContent='Uploading...';wait.style.display='block';});const tick=()=>{fetch('/status',{cache:'no-store'}).then(r=>r.json()).then(s=>{const stLast=document.getElementById('stLastFileBytes');const stProgress=document.getElementById('stProgress');const stTotal=document.getElementById('stTotalBytes');const stFsUsed=document.getElementById('stFsUsed');const stFsFree=document.getElementById('stFsFree');const stFsTotal=document.getElementById('stFsTotal');if(stLast){stLast.textContent=s.lastFileBytes;}if(stProgress){stProgress.textContent=s.streamOffset+' / '+s.stagedFileBytes;}if(stTotal){stTotal.textContent=s.totalBytesSent;}if(stFsUsed){stFsUsed.textContent=Math.floor((s.fsUsedBytes||0)/1024);}if(stFsFree){stFsFree.textContent=Math.floor((s.fsFreeBytes||0)/1024);}if(stFsTotal){stFsTotal.textContent=Math.floor((s.fsTotalBytes||0)/1024);}}).catch(()=>{});};tick();setInterval(tick,1000);})();"));
   server.sendContent(F("</script></div></body></html>"));
   server.sendContent("");
 }
@@ -1101,8 +1126,20 @@ void handleDumpEprom() {
 }
 
 void handleStatus() {
+  size_t fsTotalBytes = 0;
+  size_t fsUsedBytes = 0;
+  size_t fsFreeBytes = 0;
+  if (fsMounted) {
+    FSInfo fsInfo;
+    if (LittleFS.info(fsInfo)) {
+      fsTotalBytes = fsInfo.totalBytes;
+      fsUsedBytes = fsInfo.usedBytes;
+      fsFreeBytes = (fsTotalBytes >= fsUsedBytes) ? (fsTotalBytes - fsUsedBytes) : 0;
+    }
+  }
+
   String json;
-  json.reserve(220);
+  json.reserve(320);
   json += F("{");
   json += F("\"streamOffset\":");
   json += String(streamOffset);
@@ -1112,6 +1149,12 @@ void handleStatus() {
   json += String(lastFileBytes);
   json += F(",\"totalBytesSent\":");
   json += String(totalBytesSent);
+  json += F(",\"fsTotalBytes\":");
+  json += String(fsTotalBytes);
+  json += F(",\"fsUsedBytes\":");
+  json += String(fsUsedBytes);
+  json += F(",\"fsFreeBytes\":");
+  json += String(fsFreeBytes);
   json += F("}");
 
   server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");

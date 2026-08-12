@@ -108,7 +108,7 @@ void printCenteredSerial(const String &text, char padChar = '-') {
 
 constexpr const char *kApPassword = "0000";
 constexpr const char *kStaSsid = "KeyboardPartner";
-constexpr const char *kStaPassword = "z28hev111";
+constexpr const char *kStaPassword = "my_password";
 
 constexpr uint32_t strobeDelayMicros = 5;
 constexpr size_t kMaxFsPathLength = 31;

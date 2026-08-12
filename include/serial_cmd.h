@@ -29,6 +29,7 @@
 // SERIAL INFO AND HELP TEXT
 // ##############################################################################
 
+#include <Arduino.h>
 
 void printIDcode() {
   Serial.println("");

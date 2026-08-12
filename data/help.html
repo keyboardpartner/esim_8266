@@ -13,24 +13,30 @@
 
     <h2>Web Upload</h2>
     <ul class='status-list'>
-      <li>Select a file and start address, then click <code>Upload and stream</code>. Supported picker extensions: <code>.bin</code>, <code>.bit</code>, <code>.rom</code>.</li>
+      <li>Select a file and start address, then click <strong>Upload and stream</strong>. 
+      Supported picker extensions: <code>.bin</code>, <code>.bit</code>, <code>.rom</code>, also "all files".</li>
       <li>Files are staged in LittleFS first; <code>.bin</code> and <code>.rom</code> files 
-      are automatically streamed to device via SPI.
-      FPGA configuration (<code>.bit</code>) files are sent to FPGA via JTAG (start address not relevant here).</li>
-      <li>You may also upload <code>.html</code> or <code>.css</code> files. These are not streamed, but stored in LittleFS as well.</li>
-      <li>You can later run actions from the file table.</li>
+      are automatically streamed to device via SPI. You can later run actions from the file table.</li>
+      <li>
+      FPGA configuration (<code>.bit</code>) files are sent to FPGA via JTAG (start address not relevant here).
+      You may have a range of FPGA files for different EPROM/SRAM configurations.
+      </li>
+      <li>You may also upload new <code>.html</code> or <code>.css</code> files. 
+      These are not streamed, but stored in LittleFS as well for rendering the web page.</li>
+      <li><strong>Erase Device Memory</strong> fills EPROM simulator device with zeroes.</li>
+      <li><strong>Edit Defaults</strong> allows editing the default settings for the EPROM simulator device and Wi-Fi credentials.</li>
     </ul>
 
     <h2>File Table Actions</h2>
-    <ul>
-      <li><code>Stream</code>: sends normal data files to the selected target starting at the given address.</li>
-      <li><code>Config</code>: appears for <code>.bit</code> files and configures the FPGA via JTAG.</li>
-      <li><code>Delete</code>: removes the file from LittleFS.</li>
+    <ul class='status-list'>
+      <li><strong>Stream</strong>: sends normal data files to the selected target starting at the given address.</li>
+      <li><strong>Config</strong>: appears for <code>.bit</code> files and configures the FPGA via JTAG.</li>
+      <li><strong>Delete</strong>: removes the file from LittleFS.</li>
       <li>A click on the file name will offer it for download.</li>
     </ul>
 
     <h2>Serial Commands</h2>
-    <ul>
+    <ul class='status-list'>
       <li><code>c</code>: configure FPGA with staged file (JTAG build).</li>
       <li><code>d</code>: hexdump 256 bytes from device.</li>
       <li><code>e</code>: erase device memory.</li>
@@ -42,17 +48,18 @@
     </ul>
 
     <h2>Troubleshooting</h2>
-    <ul>
-      <li>For MOJO-like FPGA boards, ensure the bitstream "fpga_main.bit" is present in file system. 
+    <ul class='status-list'>
+      <li>For MOJO-like FPGA boards, ensure the bitstream <code>fpga_main.bit</code> is present in file system.
       The bitstream is loaded into the FPGA during startup configuration via JTAG.</li>
       <li>If upload fails, verify LittleFS is mounted and free space is available.</li>
       <li>If streaming/config fails, check file exists and is non-empty.</li>
       <li>If Wi-Fi mode falls back to AP, verify STA credentials.</li>
     </ul>
 
-    <p style="margin-top:24px">
-      <a href="/" class="action-btn">Back</a>
-    </p>
-  </div>
+    <form method="GET" action="/">
+      <button type="submit"
+        style="background:#334155;color:#e2e8f0">Back</button>
+    </form>
+ </div>
 </body>
 </html>
