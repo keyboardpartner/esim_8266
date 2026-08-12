@@ -2,9 +2,9 @@
 
 ### ESP8266 Project for PlatformIO or Arduino IDE
 
-<img src="https://github.com/keyboardpartner/esim_8266/blob/main/docs/Screenshot_web_interface.png" width="320">
+<img src="/docs/Screenshot_web_interface.png" width="320">
 
-Three versions available through #defines:
+For development of legacy computer systems and embedded controllers, an EPROM simulator is mandatory. Unfortunately, they are no longer popular and availability is sparse, while older models lack an appropriate interface. I made a few versions shown heere. Set *#defines* in *main.cpp* accordingly.
 
 ### ESIM Support
 
