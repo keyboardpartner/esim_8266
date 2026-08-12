@@ -2,7 +2,7 @@
 
 ### ESP8266 Project for PlatformIO or Arduino IDE
 
-![PCB Pic](https://github.com/keyboardpartner/esim_8266/blob/main/docs/esim_esp_reversed.jpg)
+![PCB Pic](https://github.com/keyboardpartner/esim_8266/blob/main/docs/Screenshot_web_interface.png | width=100)
 
 Three versions available through #defines:
 
@@ -53,6 +53,9 @@ MOJO is a FPGA board from embeddedmicro.com, formerly advertized as "open source
 I once made a [MOJO BIT file Uploader for Windows](https://github.com/keyboardpartner/MOJO_uploader) that flashes the SPI memory, but here a different approach is used: I send the FPGA configuration through JTAG (pins available on MOJO SV1). So the FPGA configuration may be uploaded and selected by web interface on-the-fly. The AVR on MOJO board is blocked by permanent reset. My fast JTAG loader sends the 334 KByte bitstream file for FPGA XILINX XC6SLX9 from LittleFS in about 920 ms (instead of 3.4 seconds of known version from RSP, see below), which is even faster than the ill-fated MOJO approach.
 
 For MOJO-like boards with Xilinx XC9SLX9 FPGA, ensure the correct bitstream (default "fpga_main.bit") is uploaded to file system. The bitstream is loaded into the FPGA during startup configuration via JTAG.
+
+This version can also be used as RAM emulator for 6264 or 62256 SRAMs, like the GODIL version. 
+
 
 ### OHO DY1 Support
 
