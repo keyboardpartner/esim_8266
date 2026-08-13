@@ -1,10 +1,10 @@
 # EPROM Simulator Uploader
 
-### ESP8266 Project for PlatformIO or Arduino IDE
+### ESP8266 Project for PlatformIO with Arduino Framework
 
 <img src="/docs/Screenshot_web_interface.png" width="320">
 
-For development of legacy computer systems and embedded controllers, an EPROM simulator is mandatory. Unfortunately, they are no longer popular and availability is sparse, while older models lack an appropriate interface. I made a few versions shown heere. Set *#defines* in *main.cpp* accordingly.
+For development of legacy computer systems and embedded controllers, an EPROM simulator is mandatory. Unfortunately, they are no longer popular and availability is sparse, while older models lack an appropriate interface. I made a few versions shown here. Set *#defines* in *main.cpp* accordingly.
 
 ### ESIM Support
 
@@ -76,6 +76,8 @@ For each version, I designed a one-layer PCB optimized for milling. Can be handl
 PCB design done with EasyPC from NumberOne Systems.
 
 Useful links:
+
+[MOJO BIT file Uploader for Windows](https://github.com/keyboardpartner/MOJO_uploader) (not needed here, but anyway)
 
 [MOJO v3 Bootloader and firmware](https://github.com/embmicro/mojo-bootloader/blob/master/Caterina.c)
 
