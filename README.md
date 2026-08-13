@@ -10,7 +10,7 @@ For development of legacy computer systems and embedded controllers, an EPROM si
 
 <img src="/docs/esim.jpg" width="320">
 
-ESP8266 used as an upload tool for old ESIM EPROM Simulator from c't magazine, issue 9/1991 instead of obsolete Centronix port. Outputs stream of data to 74HC595 shift register. Pulls /STROBE low on each byte sent. Supports 2764 up tp 27512 EPROMs. Unfortunately, ESIM does not support setting a start address; uploads will always start at EPROM address 0x0000.
+ESP8266 used as an upload tool for old ESIM EPROM Simulator from c't magazine, issue 9/1991. Instead of obsolete Centronix port, outputs stream of data to 74HC595 shift register. Pulls /STROBE low on each byte sent. Supports 2764 up tp 27512 EPROMs. Unfortunately, ESIM does not support readback or setting a start address; uploads will always start at EPROM address 0x0000.
 
 #### Pinout ESIM
 
@@ -42,9 +42,11 @@ New: now supports even older PEPS EPROM Simulator from c't 5/1985, page 85. This
 
 <img src="/docs/godil.jpg" width="320">
 
-I made a versatile EPROM simulator using the legacy GODIL 40 from [OHO electronic](https://www.oho-elektronik.de/). These are legacy FPGA modules sold by [Trenz electronic](https://www.trenz-electronic.de/de), but you may still find them on the web. Supports EPROMs up to 27256 (32 KByte) due to limitations of internal FPGA BRAMs. 
+I made a versatile EPROM simulator using the now legendary GODIL 40 from [OHO electronic](https://www.oho-elektronik.de/). These are FPGA modules sold by [Trenz electronic](https://www.trenz-electronic.de/de) some time ago, but you may still find them on the web. Supports EPROMs up to 27256 (32 KByte) due to limitations of internal FPGA BRAMs. Needs some jumpers for Vcc on GODIL, as to switch between 24-pin and 28-pin EPROMs. GODIL has internal logic level translators, so it is compatible with 5V systems.
 
 This version has a nice feature: It can be used as RAM emulator for 6264 or 62256 SRAMs; in this case, you may read back the RAM contents from host system. Used it to recover old programs from my very first computer, an Acorn ATOM from 1981, using the rom_adapter_2 circuit. See /pcb folder. 
+
+You need a JTAG adaptor to program GODIL's internal SPI flash.
 
 ### MOJO V3 FPGA Support
 
@@ -60,7 +62,7 @@ I once made a [MOJO BIT file Uploader for Windows](https://github.com/keyboardpa
 
 For MOJO-like boards with Xilinx XC9SLX9 FPGA, ensure the correct bitstream (default "fpga_main.bit") is uploaded to file system. The bitstream is loaded into the FPGA during startup configuration via JTAG.
 
-This version can also be used as RAM emulator for 6264 or 62256 SRAMs, like the GODIL version. 
+This version can also be used as RAM emulator for 6264 or 62256 SRAMs, like the GODIL version. Note that MOJO **does not provide logic level translators**. I think a 220R resistor in series to each logic line will do, protecting inputs from host circuit's 5V levels.
 
 
 ### OHO DY1 Support
