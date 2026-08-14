@@ -239,7 +239,6 @@ void jtagConfigure(const String &config_file) {
   delay(10);
   int num_read_total = 0;
   String str;
-  uint32_t ts = millis();
   
   File f = LittleFS.open(config_file.c_str(), "r");
   if (!f) {
@@ -248,6 +247,8 @@ void jtagConfigure(const String &config_file) {
     return;
   }
   int file_size = f.size();  // get file size (in bytes)
+
+  uint32_t ts = millis(); // Stopwatch for measuring configuration time
 
   // goto RunTest/Idle
   jtag_goto_runtest_idle();
@@ -307,12 +308,13 @@ void jtagConfigure(const String &config_file) {
   for ( int i=0; i < 32; i++ ) {
     TCK_PULSE;  // stay at Run-Test/Idle state
   }
+  uint32_t te = millis(); // Stopwatch for measuring configuration time
  
   Serial.print(F("Bitstream size: "));
   Serial.print(num_read_total);
   Serial.println(F(" bytes"));
   Serial.print(F("Configuration done in "));
-  Serial.print(millis() - ts);
+  Serial.print(te - ts);
   Serial.println(F(" msec"));
   printDivLine();
 }
