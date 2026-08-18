@@ -6,9 +6,26 @@
 
 For development of legacy computer systems and embedded controllers, an EPROM simulator is mandatory. Unfortunately, they are no longer popular and availability is sparse, while older models lack an appropriate interface. I made a few versions shown here. Set *#defines* in *main.cpp* accordingly.
 
-The ESP8266 provides a nice web interface along with help page. A 0.96" TFT (optional) displays status messages and IP info.
+The ESP8266 provides a nice web interface along with help page. For use without web interface, my [ESP8266 EPROM/SRAM Simulator Uploader](https://github.com/keyboardpartner/ESIM_Uploader) may be used to transfer files to the device.
 
-For use without web interface, my [ESP8266 EPROM/SRAM Simulator Uploader](https://github.com/keyboardpartner/ESIM_Uploader) may be used to transfer files to the device.
+### MOJO V3 FPGA Support
+
+<img src="/docs/mojo.jpg" width="320">
+
+Using a MOJO V3 FPGA board as EPROM simulator allows for 64 KByte EPROMs and SRAMs, merely by using internal FPGA BRAMs. MOJO is a FPGA board from *embeddedmicro.com*, formerly advertized as "open source". Unfortunately, the manufacturer ceased operation, and documentation is sparse now. This is how not to do "open source"!
+
+However, some cheap rip-offs are still available through Aliexpress. The original MOJO design is rather bad, using an AVR for (slowly!) uploading the configuration bitstream from an SPI flash via *Master SelectMAP* mode (instead of attaching the SPI flash direcly to FPGA; by blocking the FPGA, flashing would have been possible as well).
+
+I once made a [MOJO BIT file Uploader for Windows](https://github.com/keyboardpartner/MOJO_uploader) that flashes the SPI memory, but here a different approach is used: I send the FPGA configuration through JTAG (pins available on MOJO SV1). So the FPGA configuration may be uploaded and selected by web interface on-the-fly. The AVR on MOJO board is blocked by permanent reset. My fast JTAG loader sends the 334 KByte bitstream file for FPGA XILINX XC6SLX9 from LittleFS in about 920 ms (instead of 3.4 seconds of known version from RSP, see below), which is even faster than the ill-fated MOJO approach.
+
+For MOJO-like boards with Xilinx XC9SLX9 FPGA, ensure the correct bitstream (default "fpga_main.bit") is uploaded to file system. The bitstream is loaded into the FPGA during startup configuration via JTAG.
+
+This version can also be used as RAM emulator for 6264 or 62256 SRAMs, like the GODIL version. Note that MOJO **does not provide logic level translators**. I think a 220R resistor in series to each logic line will do, protecting inputs from host circuit's 5V levels. 
+
+### 0.96" TFT Support
+
+A 0.96" TFT (optional) displays status messages and IP info for the MOJO version. The TFT will work on other versions, too, but only the MOJO PCB provides installation.
+
 
 ### ESIM Support
 
@@ -51,23 +68,6 @@ I made a versatile EPROM simulator using the now legendary GODIL 40 from [OHO el
 This version has a nice feature: It can be used as RAM emulator for 6264 or 62256 SRAMs; in this case, you may read back the RAM contents from host system. Used it to recover old programs from my very first computer, an Acorn ATOM from 1981, using the rom_adapter_2 circuit. See /pcb folder. 
 
 You need a JTAG adaptor to program GODIL's internal SPI flash.
-
-### MOJO V3 FPGA Support
-
-<img src="/docs/mojo.jpg" width="320">
-
-(Under construction)
-
-Using a MOJO V3 FPGA board as EPROM simulator allows for 64 KByte EPROMs and SRAMs, merely by using internal FPGA BRAMs. MOJO is a FPGA board from *embeddedmicro.com*, formerly advertized as "open source". Unfortunately, the manufacturer ceased operation, and documentation is sparse now. This is how not to do "open source"!
-
-However, some cheap rip-offs are still available through Aliexpress. The original MOJO design is rather bad, using an AVR for (slowly!) uploading the configuration bitstream from an SPI flash via *Master SelectMAP* mode (instead of attaching the SPI flash direcly to FPGA; by blocking the FPGA, flashing would have been possible as well).
-
-I once made a [MOJO BIT file Uploader for Windows](https://github.com/keyboardpartner/MOJO_uploader) that flashes the SPI memory, but here a different approach is used: I send the FPGA configuration through JTAG (pins available on MOJO SV1). So the FPGA configuration may be uploaded and selected by web interface on-the-fly. The AVR on MOJO board is blocked by permanent reset. My fast JTAG loader sends the 334 KByte bitstream file for FPGA XILINX XC6SLX9 from LittleFS in about 920 ms (instead of 3.4 seconds of known version from RSP, see below), which is even faster than the ill-fated MOJO approach.
-
-For MOJO-like boards with Xilinx XC9SLX9 FPGA, ensure the correct bitstream (default "fpga_main.bit") is uploaded to file system. The bitstream is loaded into the FPGA during startup configuration via JTAG.
-
-This version can also be used as RAM emulator for 6264 or 62256 SRAMs, like the GODIL version. Note that MOJO **does not provide logic level translators**. I think a 220R resistor in series to each logic line will do, protecting inputs from host circuit's 5V levels.
-
 
 ### OHO DY1 Support
 
