@@ -155,25 +155,29 @@ void printSerialCommandsInfo() {
   Serial.println("");
   printCenteredSerial(F("Serial Commands"));
   #ifdef JTAG_SPARTAN6
-    Serial.println(F("c: config FPGA with last/staged file"));
+    Serial.println(F("c: Configurate FPGA with last/staged .bit file"));
+    Serial.println(F("o: List chip types and select emulation mode"));
   #endif
-  Serial.println(F("d<start><CR>: hexdump 256 bytes from device"));
-  Serial.println(F("e: erase EPROM"));
-  Serial.println(F("h: print web/status info and this help text"));
-  Serial.println(F("i: print file debug info"));
-  Serial.println(F("l: list LittleFS directory entries"));
-  Serial.println(F("t: test SPI transfer"));
-  Serial.println(F("r: replay last/staged file (blocking)"));
+  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+    Serial.println(F("d<start><CR>: Hexdump of 256 bytes from device"));
+    Serial.println(F("j<filename,start,len><CR>: dump EPROM to file"));
+  #endif
+  Serial.println(F("e: Erase EPROM"));
+  Serial.println(F("h: Print web/status info and this help text"));
+  Serial.println(F("i: Print file debug info"));
+  Serial.println(F("l: List LittleFS directory entries"));
+  Serial.println(F("t: Test SPI transfer"));
+  Serial.println(F("r: Replay last/staged file"));
   printDivLine();
-  Serial.println(F("a<start><CR>: Set start address for serial uploads (decimal or 0x hex format)"));
-  Serial.println(F("j<filename,start,len><CR>: dump EPROM to file"));
-  Serial.println(F("n<filename><CR>: set next serial upload filename"));
-  Serial.println(F("u<lenLo><lenHi><data...><cksLo><cksHi>: framed serial upload"));
-  Serial.println(F("(start/len accept decimal or 0x-prefixed hex)"));
-  Serial.println(F("x: print \"Ready.\" for handshaking with serial uploader"));
+  Serial.println(F("a<start><CR>: Set start address for next serial upload"));
+  Serial.println(F("n<filename><CR>: Set filename for next serial upload"));
+  Serial.println(F("u<lenLo><lenHi><data...><cksLo><cksHi>: Framed binary upload"));
+  Serial.println(F("x: Print \"Ready.\" for handshaking with serial uploader"));
   printDivLine();
-  Serial.println(F("w<ssid><CR>: set STA Wi-Fi SSID"));
-  Serial.println(F("p<password><CR>: set STA Wi-Fi password"));
+  Serial.println(F("w<ssid><CR>: Set STA Wi-Fi SSID"));
+  Serial.println(F("p<password><CR>: Set STA Wi-Fi password"));
+  Serial.println();
+  Serial.println(F("Note: start/len accept decimal or 0x-prefixed hex"));
   printDivLine();
 }  
 
