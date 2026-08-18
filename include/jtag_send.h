@@ -200,6 +200,9 @@ void jtag_shift_last_chunk(int chunk_size) {
 
 
 uint32_t jtagReadIDcode() {
+  pinMode( TCK_PIN, OUTPUT );
+  pinMode( TMS_PIN, OUTPUT );
+  pinMode( TDI_PIN, OUTPUT );
   int tdo;
   uint32_t idcode = 0;
   jtag_goto_runtest_idle();
@@ -230,13 +233,12 @@ uint32_t jtagReadIDcode() {
 }
 
 void jtagConfigure(const String &config_file) {
-  Serial.println();
-  printCenteredSerial(F("FPGA Config"));
-  // configure GPIO pins for JTAG link 
   pinMode( TCK_PIN, OUTPUT );
   pinMode( TMS_PIN, OUTPUT );
   pinMode( TDI_PIN, OUTPUT );
-  delay(10);
+  Serial.println();
+  printCenteredSerial(F("FPGA Config"));
+  // configure GPIO pins for JTAG link 
   int num_read_total = 0;
   String str;
   

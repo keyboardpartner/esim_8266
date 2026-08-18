@@ -10,7 +10,40 @@
 #define USE_WEB_SERVER
 
 // uncomment to use  DY1 Display
-#define USE_DY1_DISPLAY
+// #define USE_DY1_DISPLAY
+
+// uncomment to use  TFT 0.96" Display (SPI)
+#define USE_TFT_DISPLAY
+
+#ifdef USE_TFT_DISPLAY
+  #include <TFT_eSPI.h>
+  #include "Free_Fonts.h"
+  TFT_eSPI tft = TFT_eSPI();       // Invoke custom library as global
+
+  // https://rgbcolorpicker.com/565
+  #define TFT_MEDGREY  0x8410
+  #define TFT_DIALOGGREY 0x736e     // Window background color
+  #define TFT_CHARCOAL 0x2124
+ 
+  #define TFT_V_OFFS  24 // needed for 0.96" TFT display with 160x80 resolution, to center the content vertically
+
+  #define DISPLAY_CENTER_X  80
+  #define DISPLAY_CENTER_Y  (40 + TFT_V_OFFS) // 40 + vertical offset for 0.96" TFT display with 160x80 resolution
+
+  // msgType =0/16 "i" in blau, =1/17 "?" in blau, =2/18 "!" in rot
+  enum DialogBoxType {
+    DB_INFO = 0,
+    DB_REQUEST = 1,
+    DB_ERROR = 2,
+  };
+
+  void fillShadowRect() {
+    tft.drawRect(0, TFT_V_OFFS, 160, 80, TFT_WHITE);
+    tft.fillRectVGradient(1, TFT_V_OFFS + 1, 158, 78, TFT_DIALOGGREY, TFT_CHARCOAL);
+  }
+
+#endif
+
 
 // Uncomment to enable verbose serial debug output.
 // #define DEBUG
@@ -108,6 +141,7 @@ void printCenteredSerial(const String &text, char padChar = '-') {
   uint32_t jtagIDcode = 0;
 #endif
 
+
 constexpr const char *kApPassword = "0000";
 constexpr const char *kStaSsid = "KeyboardPartner";
 constexpr const char *kStaPassword = "my_password";
@@ -120,6 +154,24 @@ constexpr uint8_t kSerialNakByte = 0x15;
 constexpr uint16_t kSerialAckChunkBytes = 128;
 constexpr const char *kGlobalSettingsPath = "/.settings.ini";
 constexpr size_t kMaxGlobalSettingsBytes = 1024;
+
+constexpr const char *kChipTypeNames[] = {
+  "2716",
+  "2732",
+  "2764",
+  "27128",
+  "27256",
+  "27512",
+  "2532",
+  "2364",
+  "6116",
+  "6264",
+  "62256",
+  "(none)"
+};
+constexpr size_t kChipTypeCount = sizeof(kChipTypeNames) / sizeof(kChipTypeNames[0]);
+constexpr uint32_t kInvalidChipTypeIndex = 11; // default to 11, which is an invalid index, meaning no chip type selected
+uint32_t currentChipTypeIndex = kInvalidChipTypeIndex; // default to 11, which is an invalid index, meaning no chip type selected
 
 enum WifiMode {
   WifiMode_Unknown = 0,
@@ -142,9 +194,13 @@ size_t stagedFileBytes = 0;
 size_t streamOffset = 0;
 String currentFilePath;
 String pendingSerialFilename;
+
 uint32_t webUploadStartAddr = 0;
 bool currentUploadStartArgInvalid = false;
+
 uint32_t lastUploadStartAddr = 0;
+uint32_t lastStreamedStartAddr = 0;
+
 String staSsid = String(kStaSsid);
 String staPassword = String(kStaPassword);
 
@@ -154,4 +210,122 @@ bool likelyFreshFsImage = false;
 String startupFpgaPath = "/fpga_main.bit";
 
 uint32_t fpgaVersion = 0;
+
+
+
+void drawMsgBox(const String &title, const String &message, DialogBoxType msgType, uint32_t timeoutMs = 1000) {
+  #ifdef USE_TFT_DISPLAY
+    fillShadowRect();
+    uint16_t icon_color;
+    tft.setTextColor(TFT_WHITE);
+    tft.setTextSize(1);
+    tft.setFreeFont(FF18);
+    tft.setTextDatum(TC_DATUM);
+    if (message.length() == 0) {
+      tft.drawString(title, 100, TFT_V_OFFS + 32);
+    } else {
+      tft.drawString(title, 100, TFT_V_OFFS + 14);
+      tft.drawString(message, 100, TFT_V_OFFS + 42);
+    }
+    if (msgType == DB_ERROR)
+      icon_color = TFT_RED;
+    else
+      icon_color = TFT_BLUE;
+    tft.setTextDatum(MC_DATUM); // middle center text datum
+    tft.fillRoundRect(16, DISPLAY_CENTER_Y - 18, 26, 36, 4, icon_color); // center_x - 120 +
+    tft.setTextColor(TFT_WHITE, icon_color);
+    tft.setFreeFont(FF22);
+    int16_t icon_x = 28; // adjust center_x for icon position
+    int16_t icon_y = DISPLAY_CENTER_Y - 2;    // nudge up
+    switch (msgType) {
+    case DB_INFO:
+      tft.drawString("i", icon_x, icon_y);
+      break;
+    case DB_REQUEST:
+      tft.drawString("?", icon_x, icon_y);
+      break;
+    case DB_ERROR:
+      tft.drawString("!", icon_x, icon_y);
+      break;
+    }
+  #endif
+  delay(timeoutMs);
+} 
+
+void drawStringBox(const String &message1, const String &message2 = "", uint32_t timeoutMs = 1000) {
+  #ifdef USE_TFT_DISPLAY
+    fillShadowRect();
+    tft.setTextColor(TFT_WHITE);
+    tft.setTextSize(1);
+    tft.setTextDatum(MC_DATUM);
+    if (message1.length() < 10) {
+      tft.setFreeFont(FF18);
+    } else {
+      tft.setFreeFont(FF17);
+    }
+    if (message2.length() > 0) {
+      if (message2.length() < 10) {
+        tft.setFreeFont(FF18);
+      } else {
+        tft.setFreeFont(FF17);
+      }
+      tft.drawString(message1, DISPLAY_CENTER_X, DISPLAY_CENTER_Y - 12);
+      tft.drawString(message2, DISPLAY_CENTER_X, DISPLAY_CENTER_Y + 12);
+    } else {
+      tft.drawString(message1, DISPLAY_CENTER_X, DISPLAY_CENTER_Y);
+    }
+  #endif
+  delay(timeoutMs);
+}
+
+void drawStatusBox() {
+  #ifdef USE_TFT_DISPLAY
+    fillShadowRect();
+    tft.setTextColor(TFT_YELLOW);
+    tft.setTextSize(1);
+    tft.setFreeFont(FF17);
+    int16_t y= TFT_V_OFFS + 18;
+    int16_t line_height = 18;
+    tft.setCursor(5, y);
+    if (currentWifiMode == WifiMode_STA) {
+      tft.print(WiFi.localIP().toString());
+    } else {
+      tft.print(WiFi.softAPIP().toString());
+    }
+    y += line_height;
+    tft.setTextColor(TFT_CYAN);
+    tft.setCursor(5, y);
+    tft.printf("FPGA: %08X", fpgaVersion);
+    y += line_height;
+    tft.setTextColor(TFT_WHITE);
+    tft.setCursor(5, y);
+    if (currentFilePath.length() > 18) {
+      tft.setTextFont(1);
+      tft.setCursor(5, y-10);
+    }
+    tft.print(currentFilePath);
+    tft.setFreeFont(FF17);
+    tft.setTextColor(TFT_GREEN);
+    y += line_height;
+    tft.setCursor(5, y);
+    tft.print(kChipTypeNames[currentChipTypeIndex]);
+    tft.setCursor(DISPLAY_CENTER_X, y);
+    tft.print("0x"+String(lastStreamedStartAddr, HEX));
+  #endif
+}
+
+void readyMessage() {
+  #ifdef USE_DY1_DISPLAY
+    // Anzeige "rdy" auf OHO-Display
+    set_letter(0, 'r');
+    set_letter(1, 'd');
+    set_letter(2, 'y');
+    spi_send_displ_arr();
+  #endif
+  #ifdef USE_TFT_DISPLAY
+    drawMsgBox(F("Ready"), F(""), DB_INFO, 1000);
+    drawStatusBox();
+  #endif
+}
+
 #endif  // GLOBALVARS_H

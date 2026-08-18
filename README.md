@@ -6,6 +6,10 @@
 
 For development of legacy computer systems and embedded controllers, an EPROM simulator is mandatory. Unfortunately, they are no longer popular and availability is sparse, while older models lack an appropriate interface. I made a few versions shown here. Set *#defines* in *main.cpp* accordingly.
 
+The ESP8266 provides a nice web interface along with help page. A 0.96" TFT (optional) displays status messages and IP info.
+
+For use without web interface, my [ESP8266 EPROM/SRAM Simulator Uploader](https://github.com/keyboardpartner/ESIM_Uploader) may be used to transfer files to the device.
+
 ### ESIM Support
 
 <img src="/docs/esim.jpg" width="320">
@@ -76,6 +80,8 @@ For each version, I designed a one-layer PCB optimized for milling. Can be handl
 PCB design done with EasyPC from NumberOne Systems.
 
 Useful links:
+
+[ESP8266 EPROM/SRAM Simulator Uploader](https://github.com/keyboardpartner/ESIM_Uploader) Windows CLI Upload tool, sends files to EPROM Simulator Uploader via COM port instead of web interface
 
 [MOJO BIT file Uploader for Windows](https://github.com/keyboardpartner/MOJO_uploader) (not needed here, but anyway)
 

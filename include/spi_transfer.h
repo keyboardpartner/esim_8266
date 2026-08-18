@@ -45,6 +45,7 @@ void setUpSendLed(bool on) {
   constexpr uint32_t readDataCmd  = 0x40000000; // read data command
   constexpr uint32_t readCycle  = 0x00000000; // read data command
   constexpr uint32_t readVersionCmd = 0xC0000000; // read ID/version command
+  constexpr uint32_t setChipType = 0xA0000000; // set chip type command
 
   // Clears all output bits on the shift register, go to emulation mode
   void clearDataBus() {
@@ -129,7 +130,8 @@ void setUpSendLed(bool on) {
       return false;
     }
 
-    set_static_message(F("dep"));
+    dy1message(F("dep"));
+    drawStringBox("Dump", "RAM/EPROM", 0);
     LittleFS.remove(filename);
     File outFile = LittleFS.open(filename, "w");
     if (!outFile) {
@@ -157,14 +159,15 @@ void setUpSendLed(bool on) {
     Serial.print(filename);
     Serial.print(F(", bytes="));
     Serial.println(len);
-    set_rdy_message();
+    readyMessage();
     return true;
   }
 
   void testSPItransfer() {
     // Write test pattern to internal registers and read back to verify correctness.
     Serial.println(F("Testing SPI transfer to FPGA BRAM..."));
-    set_static_message(F("tst"));
+    dy1message(F("tst"));
+    drawStringBox("Test", "Pattern", 0);
     uint8_t vals_written[16];
     uint32_t start_addr = 0x0400;
     startBlockTransfer(start_addr);
@@ -184,7 +187,7 @@ void setUpSendLed(bool on) {
     }
     stopBlockTransfer();
     delay(500);
-    set_rdy_message();
+    readyMessage();
   }
 #endif
 
@@ -224,9 +227,8 @@ void setUpSendLed(bool on) {
   void testSPItransfer() {
     Serial.println(F("Testing SPI transfer, sending fixed Byte 0x35."));
     Serial.println(F("Press any key to stop test."));
-    #ifdef USE_DY1_DISPLAY
-      set_static_message(F("tst"));
-    #endif
+    dy1message(F("tst"));
+    drawStringBox("Test", "Pattern");
     clearDataBus();
     do {
       outputByte(0x35);
@@ -317,9 +319,8 @@ void setUpSendLed(bool on) {
   void testSPItransfer() {
     Serial.println(F("Testing SPI transfer, sending fixed Byte 0x35."));
     Serial.println(F("Press any key to stop test."));
-    #ifdef USE_DY1_DISPLAY
-      set_static_message(F("tst"));
-    #endif
+    dy1message(F("tst"));
+    drawStringBox("Test", "Pattern");
     startBlockTransfer(0);
     do {
       outputByte(0x35, 0);
@@ -330,9 +331,19 @@ void setUpSendLed(bool on) {
   }
 #endif
 
-void eraseEPROM() {
-  Serial.print(F("Erasing EPROM... "));
-  set_static_message(F("Ers"));
+// Sends chip type ID (0..15) to device output for GODIL/JTAG modes.
+// Other modes ignore this setting.
+void outputChipType(uint32_t value) {
+#if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+  digitalWrite(LATCH_PIN, LOW);
+  SPI.write32((value & 0x0F) | setChipType); // set chip type command
+  digitalWrite(LATCH_PIN, HIGH);
+#else
+  (void)value;
+#endif
+}
+
+void eraseEPROMsilent() {
   startBlockTransfer(0);
   for (uint32_t i = 0; i < maxBytesToTransfer; ++i) {
     outputByte(0xFF);
@@ -341,6 +352,13 @@ void eraseEPROM() {
     }
   }
   stopBlockTransfer();
+}
+
+void eraseEPROM() {
+  Serial.print(F("Erasing EPROM... "));
+  dy1message(F("Ers"));
+  drawStringBox("Erase", "RAM/EPROM", 0);
+  eraseEPROMsilent();
   Serial.println(F("Done."));
-  set_rdy_message();
+  readyMessage();
 }

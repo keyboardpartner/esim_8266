@@ -60,12 +60,16 @@
 // Display helpers are extracted to a dedicated header.
 #include "dy1_display.h"
 
+#ifdef USE_TFT_DISPLAY
+  #include <TFT_eSPI.h>
+#endif
+
 ESP8266WebServer server(80);
 
 
 String htmlEscape(const String &input);
 String urlEncodeComponent(const String &input);
-bool startPlaybackFromStaging(uint32_t startAddr = 0);
+bool startPlaybackFromStaging(uint32_t startAddr, const String &filePath);
 bool parseUnsignedValue(const String &text, uint32_t &valueOut);
 bool loadStartAddressForFile(const String &filePath, uint32_t &startAddrOut);
 bool loadGlobalSettings();
@@ -122,7 +126,7 @@ void setup() {
     digitalWrite(LATCH_PIN, HIGH);
     Serial.print(F("FPGA Binary Uploader by Carsten Meyer 7/2026 V. "));
     Serial.println(versionString);
-   SPI.begin();
+    SPI.begin();
     SPI.setFrequency(10000000);
     SPI.setDataMode(SPI_MODE0);
     SPI.setBitOrder(MSBFIRST);
@@ -175,7 +179,17 @@ void setup() {
     clear_disp(0);
     pinMode(DY1_LATCH_PIN, OUTPUT);
     digitalWrite(DY1_LATCH_PIN, LOW);
-    set_static_message(F("rst"));
+    dy1message(F("rst"));
+  #endif
+
+  #ifdef USE_TFT_DISPLAY
+    pinMode(TFT_CS, OUTPUT);
+    pinMode(TFT_DC, OUTPUT);
+    tft.init();
+    tft.setRotation(3);  //The parameters are: 0, 1, 2, 3, representing the rotation of the screen 0°, 90°, 180°, 270°
+    tft.setTextSize(1);
+    tft.fillRect(0, 0, 160, 160, TFT_BLACK);
+    drawStringBox(F("ESP Uploader"), "Version " + String(versionString), 0);
   #endif
 
   clearDataBus();
@@ -196,11 +210,9 @@ void setup() {
   if (!LittleFS.begin()) {
     Serial.println(F("ERROR: LittleFS init failed"));
     fsMounted = false;
-    #ifdef USE_DY1_DISPLAY
-      set_static_message(F("FsE"));
-      delay(1000); 
-    #endif
-   } else {
+    dy1message(F("FsE"));
+    drawMsgBox(F("Error"), F("LittleFS init failed"), DB_ERROR);
+  } else {
     fsMounted = true;
     warnIfLikelyFreshFilesystemImage();
     loadGlobalSettings();
@@ -221,31 +233,38 @@ void setup() {
     }
   }
   #ifdef USE_WEB_SERVER
-    set_static_message(F("con"));
+    dy1message(F("con"));
+    drawMsgBox(F("Wi-Fi"), F("Connect"), DB_INFO, 0);
     serverInit();
     #ifdef USE_DY1_DISPLAY
       // display IP address on the 3-digit 7-segment display for a few seconds.
       if (currentWifiMode == WifiMode_STA) {
         for (int i = 0; i < 4; ++i) {
-          set_number(WiFi.localIP()[i], i == 3 ? -1 : 2); // Display the last octet of the IP address
+          dy1number(WiFi.localIP()[i], i == 3 ? -1 : 2); // Display the last octet of the IP address
           delay(350);
         }
       } else {
         for (int i = 0; i < 4; ++i) {
-          set_number(WiFi.softAPIP()[i], i == 3 ? -1 : 2); // Display the last octet of the IP address
+          dy1number(WiFi.softAPIP()[i], i == 3 ? -1 : 2); // Display the last octet of the IP address
           delay(350);
         }
       }
       Serial.println(F("Server started."));
       delay(500); // additional delay to make the last digit visible for a bit longer
-      set_static_message(wifiModeLabel);
+      dy1message(wifiModeLabel);
       delay(500); 
-      set_static_message(F("on "));
+      dy1message(F("on "));
       delay(500);
     #endif
+    if (currentWifiMode == WifiMode_STA) {
+      drawStringBox(F("STA Mode"), WiFi.localIP().toString());
+    } else {
+      drawStringBox(F("AP Mode"), WiFi.softAPIP().toString());
+    }
     printWebInfo();
   #else
-    set_static_message(F("off"));
+    dy1message(F("off"));
+    drawMsgBox(F("Wi-Fi"), F("OFF"), DB_INFO);
   #endif
 
   #ifdef GODIL_SPI
@@ -258,19 +277,15 @@ void setup() {
         if (startupFpgaFile) {
           startupFpgaFile.close();
           if (isBitstreamFilePath(startupFpgaPath)) {
-            #ifdef USE_DY1_DISPLAY
-              set_static_message(F("cfg"));
-            #endif
+            drawStringBox(F("FPGA Config"), startupFpgaPath, 0);
+            dy1message(F("cfg"));
             jtagConfigure(startupFpgaPath);
             printIDcode();
-            set_rdy_message();
-          }
+           }
         }
       } else {
-        #ifdef USE_DY1_DISPLAY
-          set_static_message(F("Err"));
-          delay(1000); 
-        #endif
+        dy1message(F("Err"));
+        drawMsgBox(F("FPGA"), F("Config Error"), DB_ERROR);
         Serial.print(F("File "));
         Serial.print(startupFpgaPath);
         Serial.println(F(" not found, FPGA not configured!"));
@@ -281,11 +296,13 @@ void setup() {
   listLittleFsEntries();
   printFileInfo();
   printSerialCommandsInfo();
+  eraseEPROMsilent();
   Serial.println("");
   if (!isBitstreamFilePath(currentFilePath)) {
-    startPlaybackFromStaging(resolveStartAddressForPath(currentFilePath));
+    startPlaybackFromStaging(resolveStartAddressForPath(currentFilePath), currentFilePath);
+  } else {
+    readyMessage();
   }
-  set_rdy_message();
   Serial.println(F("Ready."));
 }
 

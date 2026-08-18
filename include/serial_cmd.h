@@ -39,8 +39,10 @@ void printIDcode() {
     Serial.printf("ID code: %08X\n", jtagIDcode);
     Serial.print(F("(X4001093 for Xilinx XC6SLX9)\n"));
     getFPGAversion();
+    Serial.print(F("Emulation: "));
+    Serial.println(kChipTypeNames[currentChipTypeIndex]);
     printDivLine();
-  #endif
+   #endif
 }
 
 void printFileInfo() {
@@ -163,6 +165,7 @@ void printSerialCommandsInfo() {
   Serial.println(F("t: test SPI transfer"));
   Serial.println(F("r: replay last/staged file (blocking)"));
   printDivLine();
+  Serial.println(F("a<start><CR>: Set start address for serial uploads (decimal or 0x hex format)"));
   Serial.println(F("j<filename,start,len><CR>: dump EPROM to file"));
   Serial.println(F("n<filename><CR>: set next serial upload filename"));
   Serial.println(F("u<lenLo><lenHi><data...><cksLo><cksHi>: framed serial upload"));
@@ -192,7 +195,7 @@ bool readSerialFilename(String &filenameOut) {
   String rawName;
   while (true) {
     uint8_t nextByte = 0;
-    if (!readSerialByteWithTimeout(nextByte, kSerialUploadTimeoutMs)) {
+    if (!readSerialByteWithTimeout(nextByte, kSerialUploadTimeoutMs*25U)) {
       return false;
     }
     if (nextByte == '\r') {
@@ -443,19 +446,19 @@ void processSerialUploadCommand() {
   lastFileBytes = stagedFileBytes;
   uploadInProgress = false;
   setUploadLed(false);
-  const uint32_t startAddr = resolveStartAddressForPath(currentFilePath);
-  if (!saveStartAddressForFile(currentFilePath, startAddr)) {
-    Serial.println(F("ERROR: failed to save start address metadata."));
-  }
   lastFilename = baseNameFromPath(currentFilePath);
-  lastUploadStartAddr = startAddr;
+  // lastUploadStartAddr is already set when processing the 'a' command.
   if (isBitstreamFilePath(currentFilePath)) {
     startupFpgaPath = normalizeFsPath(currentFilePath);
+    lastUploadStartAddr = 0;
+  }
+  if (!saveStartAddressForFile(currentFilePath, lastUploadStartAddr)) {
+    Serial.println(F("ERROR: failed to save start address metadata."));
   }
   if (!saveGlobalSettings()) {
     Serial.println(F("ERROR: failed to save global settings."));
   }
-  if (!startPlaybackFromStaging(startAddr)) {
+  if (!startPlaybackFromStaging(lastUploadStartAddr, currentFilePath)) {
     currentUploadFsError = true;
     Serial.println(F("ERROR: failed to send staged file."));
     return;
@@ -482,7 +485,7 @@ void processSerialUploadCommand() {
 
 void processSerialCommands() {
   String dumpLine;
-  String hexdumpLine;
+  String optionString;
   String filename;
   String wifiValue;
   #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
@@ -492,15 +495,31 @@ void processSerialCommands() {
   while (Serial.available() > 0) {
     const char cmd = static_cast<char>(Serial.read());
     switch (cmd) {
+      case 'a':
+      case 'A':
+        Serial.print(F("\rStart address (dec/0x): "));
+        if (!readSerialLine(optionString, kSerialUploadTimeoutMs * 25U)) {
+          Serial.println(F("\rERROR: timeout while reading start address."));
+          break;
+        }
+        optionString.trim();
+        if (optionString.length() > 0 && !parseUnsignedValue(optionString, lastUploadStartAddr)) {
+          Serial.println(F("\rERROR: invalid start address. Use decimal or 0x-prefixed hex."));
+          break;
+        }
+        Serial.print(F("Start address set to 0x"));
+        Serial.println(lastUploadStartAddr, HEX);
+        break;
       #ifdef JTAG_SPARTAN6
         case 'c':
         case 'C':
           // config SPARTAN 6 FPGA via JTAG (only available in JTAG_SPARTAN6 mode)
           Serial.write('\r');
-          set_static_message(F("cfg"));
+          dy1message(F("cfg"));
+          drawStringBox("FPGA Cfg", startupFpgaPath, 0);
           jtagConfigure(startupFpgaPath);
           printIDcode();
-          set_rdy_message();
+          readyMessage();
           break;
       #endif
       case 'e':
@@ -510,8 +529,8 @@ void processSerialCommands() {
         break;
       case 'r':
       case 'R':
-       Serial.print(F("\rReplay...  "));
-        startPlaybackFromStaging(resolveStartAddressForPath(currentFilePath));
+        Serial.print(F("\rReplay...  "));
+        startPlaybackFromStaging(lastUploadStartAddr, currentFilePath);
         break;
       case 'i':
       case 'I':
@@ -521,12 +540,12 @@ void processSerialCommands() {
       case 'D':
         #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
           Serial.print(F("\rDump from addr: "));
-          if (!readSerialLine(hexdumpLine, kSerialUploadTimeoutMs * 25U)) {
+          if (!readSerialLine(optionString, kSerialUploadTimeoutMs * 25U)) {
             Serial.println(F("\rERROR: timeout while reading hexdump start address."));
             break;
           }
-          hexdumpLine.trim();
-          if (hexdumpLine.length() > 0 && !parseUnsignedValue(hexdumpLine, startAddr)) {
+          optionString.trim();
+          if (optionString.length() > 0 && !parseUnsignedValue(optionString, startAddr)) {
             Serial.println(F("\rERROR: invalid start address. Use decimal or 0x-prefixed hex."));
             break;
           }
@@ -535,6 +554,44 @@ void processSerialCommands() {
           startAddr += 256;
         #else
           Serial.println(F("\rERROR: command d is only available in FPGA mode."));
+        #endif
+        break;
+      case 'o':
+      case 'O':
+        #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+          // List chip types and prompt for selection (only available in FPGA mode)
+          Serial.println(F("\rAvailable chip types:"));
+          for (uint32_t i = 0; i < kChipTypeCount; ++i) {
+            Serial.write(' ');
+            if (i < 10) {
+              Serial.write(' ');
+            }
+            Serial.print(i);
+            Serial.print(F(": "));
+            Serial.print(kChipTypeNames[i]);
+            if (i == currentChipTypeIndex) {
+              Serial.print(F(" (active)"));
+            }
+            Serial.println();
+          }
+          Serial.print(F("Chip type (0.."));
+          Serial.print(kChipTypeCount - 1);
+          Serial.print(F("): "));
+          if (!readSerialLine(optionString, kSerialUploadTimeoutMs * 25U)) {
+            Serial.println(F("\rERROR: timeout while reading chip type."));
+            break;
+          }
+          optionString.trim();
+          if (optionString.length() > 0 && !parseUnsignedValue(optionString, currentChipTypeIndex)) {
+            Serial.println(F("\rERROR: invalid chip type. Use decimal or 0x-prefixed hex."));
+            break;
+          }
+          Serial.print(F("Emulation set to "));
+          Serial.println(kChipTypeNames[currentChipTypeIndex]);
+          outputChipType(currentChipTypeIndex);
+          saveGlobalSettings();
+        #else
+          Serial.println(F("\rERROR: command o is only available in FPGA mode."));
         #endif
         break;
       case 'l':
@@ -552,15 +609,15 @@ void processSerialCommands() {
       case 'x':
       case 'X':
         Serial.println();
-        set_rdy_message();
+        readyMessage();
         Serial.println(F("Ready."));
         break;
       case 't':
       case 'T':
         Serial.write('\r');
         testSPItransfer();
-        test_display();
-        set_rdy_message();
+        dy1test();
+        readyMessage();
         Serial.println(F("Ready."));
        break;
       case 'n':
@@ -659,5 +716,6 @@ void processSerialCommands() {
         printSerialCommandsInfo();
         break;
     }
+    drawStatusBox();
   }
 }

@@ -37,12 +37,20 @@
 
     <h2>Serial Commands</h2>
     <ul class='status-list'>
+      <li><code>a</code>: set start address for serial operations (prompted, decimal or 0x hex format).</li>
       <li><code>c</code>: configure FPGA with staged file (JTAG build).</li>
       <li><code>d</code>: hexdump 256 bytes from device.</li>
       <li><code>e</code>: erase device memory.</li>
       <li><code>h</code>: print status and help text.</li>
       <li><code>i</code>: print current file/debug info.</li>
+      <li><code>l</code>: list all LittleFS directory entries.</li>
+      <li><code>n</code>: provide next serial upload filename (terminated by CR).</li>
+      <li><code>o</code>: list chip types and select emulation mode (FPGA mode only).</li>
+      <li><code>p</code>: set Wi-Fi password (prompted, terminated by CR).</li>
       <li><code>r</code>: replay current staged file.</li>
+      <li><code>t</code>: test SPI transfer and display.</li>
+      <li><code>w</code>: set Wi-Fi SSID (prompted, terminated by CR).</li>
+      <li><code>x</code>: print ready message.</li>
       <li><code>j&lt;filename,start,len&gt;&lt;CR&gt;</code>: dump EPROM to file.</li>
       <li><code>u</code>: framed serial upload.</li>
     </ul>

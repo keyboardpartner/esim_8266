@@ -96,7 +96,7 @@ void set_dp(uint8_t pos) {
 }
 
 
-void set_number(int32_t number, int dp_pos, bool ripple_blank = true) {
+void dy1number(int32_t number, int dp_pos, bool ripple_blank = true) {
   // dp_pos = -1: keine Dezimalstelle, 0..DIGIT_MAX: Dezimalpunkt an dieser Position
   // ripple_blank = true: führende Nullen werden als Leerzeichen angezeigt
   // ripple_blank = false: führende Nullen werden als "0" angezeigt
@@ -126,7 +126,7 @@ void set_number(int32_t number, int dp_pos, bool ripple_blank = true) {
 }
 
 
-void set_static_message(String msg) {
+void dy1message(String msg) {
   #ifdef USE_DY1_DISPLAY
     for (uint8_t i = 0; (i < msg.length()) && (i <= DIGIT_MAX); i++) {
       set_letter(i, msg.charAt(i));
@@ -135,17 +135,7 @@ void set_static_message(String msg) {
   #endif
 }
 
-void set_rdy_message() {
-  #ifdef USE_DY1_DISPLAY
-    // Anzeige "rdy" auf OHO-Display
-    set_letter(0, 'r');
-    set_letter(1, 'd');
-    set_letter(2, 'y');
-    spi_send_displ_arr();
-  #endif
-}
-
-void test_display() {
+void dy1test() {
   #ifdef USE_DY1_DISPLAY
     Serial.println(F("Testing DY1 display..."));
     uint8_t seg = 1;
@@ -157,7 +147,7 @@ void test_display() {
       spi_send_displ_arr();
       delay(100);
     }
-    set_number(123, 2);
+    dy1number(123, 2);
     delay(500);
   #endif
 }

@@ -30,13 +30,14 @@ entity bram_wrapper is
     SYSCLK:   in STD_LOGIC;
     END_TICK: in STD_LOGIC; 
     VERSION:  in STD_LOGIC_VECTOR(31 DOWNTO 0);
-    SPI_RX:  in STD_LOGIC_VECTOR(31 DOWNTO 0);
-    SPI_TX:  out STD_LOGIC_VECTOR(31 DOWNTO 0);
+    SPI_RX:   in STD_LOGIC_VECTOR(31 DOWNTO 0);
+    SPI_TX:   out STD_LOGIC_VECTOR(31 DOWNTO 0);
+    TYPE_SEL: out STD_LOGIC_VECTOR(3 DOWNTO 0);
     RAM_ADDR: in STD_LOGIC_VECTOR(15 DOWNTO 0);
     RAM_DATA: inout STD_LOGIC_VECTOR(7 DOWNTO 0);
-    RAM_CE: in STD_LOGIC;
-    RAM_OE: in STD_LOGIC;
-    RAM_WR: in STD_LOGIC
+    RAM_CE:   in STD_LOGIC;
+    RAM_OE:   in STD_LOGIC;
+    RAM_WR:   in STD_LOGIC
   );
 end bram_wrapper;
 
@@ -132,6 +133,7 @@ begin
     -- "1000xxxx xxxxxxxx xxxxxxxx dddddddd" = write data command
     -- "0100xxxx xxxxxxxx xxxxxxxx xxxxxxxx" = read data command
     -- "1100xxxx xxxxxxxx xxxxxxxx xxxxxxxx" = read ID/version command
+    -- "1010xxxx xxxxxxxx xxxxxxxx xxxxxxxx" = Set Type Select
     -- "0000xxxx xxxxxxxx xxxxxxxx xxxxxxxx" = SPI read cycle, return data from last read command
 
     end_tick_d1 <= END_TICK;
@@ -154,6 +156,10 @@ begin
           increment <= autoinc_enable;
         when "0100" => -- read data command
           SPI_TX <= x"000000" & data_spi_rd;
+          increment <= '0'; -- do not increment address counter on read command, only on SPI read cycle
+       when "1010" => -- Set Type Select
+          TYPE_SEL <= SPI_RX(3 downto 0);
+          autoinc_enable <= '0';
           increment <= '0'; -- do not increment address counter on read command, only on SPI read cycle
         when "1100" => -- read ID/version command
           SPI_TX <= VERSION;

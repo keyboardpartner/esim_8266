@@ -1,4 +1,8 @@
 #pragma once
+
+#if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+void outputChipType(uint32_t value);
+#endif
 // ################################################################################
 //
 //      #####  ####### ######  #     # ####### ######  
@@ -311,6 +315,7 @@ bool loadStartAddressForFile(const String &filePath, uint32_t &startAddrOut) {
 // startup_fpga_path=<path to FPGA bitstream file>
 // sta_ssid=<Wi-Fi SSID for station mode>
 // sta_password=<Wi-Fi password for station mode>
+// chip_type=<chip type index from kChipTypeNames>
 // ################################################################################
 
 bool saveGlobalSettings() {
@@ -333,6 +338,8 @@ bool saveGlobalSettings() {
   iniFile.println(staSsid);
   iniFile.print(F("sta_password="));
   iniFile.println(staPassword);
+  iniFile.print(F("chip_type="));
+  iniFile.println(static_cast<unsigned long>(currentChipTypeIndex));
   iniFile.close();
   return true;
 }
@@ -400,6 +407,12 @@ bool loadGlobalSettings() {
     } else if (key == F("sta_password")) {
       staPassword = value;
       loadedAnything = true;
+    } else if (key == F("chip_type")) {
+      uint32_t parsed = 0;
+      if (parseUnsignedValue(value, parsed) && parsed < kChipTypeCount && parsed <= 15) {
+        currentChipTypeIndex = static_cast<uint8_t>(parsed);
+        loadedAnything = true;
+      }
     }
   }
 
@@ -412,6 +425,11 @@ bool loadGlobalSettings() {
   if (!isValidFsPath(startupFpgaPath) || !isBitstreamFilePath(startupFpgaPath)) {
     startupFpgaPath = F("/fpga_main.bit");
   }
+
+#if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+  outputChipType(currentChipTypeIndex);
+#endif
+
   return loadedAnything;
 }
 
@@ -512,6 +530,42 @@ String jsonEscape(const String &input) {
     }
   }
   return escaped;
+}
+
+void handleSetChipType() {
+  if (!server.hasArg("chip_type")) {
+    pendingMessage = F("Cannot set chip type: missing selection.");
+    redirectToRoot();
+    return;
+  }
+
+  uint32_t selectedIndex = 0;
+  if (!parseUnsignedValue(server.arg("chip_type"), selectedIndex)) {
+    pendingMessage = F("Cannot set chip type: invalid value.");
+    redirectToRoot();
+    return;
+  }
+
+  if (selectedIndex >= kChipTypeCount || selectedIndex > 15) {
+    pendingMessage = F("Cannot set chip type: out of range.");
+    redirectToRoot();
+    return;
+  }
+
+#if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+  outputChipType(selectedIndex);
+  currentChipTypeIndex = static_cast<uint8_t>(selectedIndex);
+  if (!saveGlobalSettings()) {
+    pendingMessage = F("Chip type set, but defaults could not be saved.");
+  } else {
+    pendingMessage = F("Chip type set to ");
+    pendingMessage += kChipTypeNames[currentChipTypeIndex];
+  }
+#else
+  pendingMessage = F("Chip type selection is not supported in this SPI mode.");
+#endif
+  drawStatusBox();
+  redirectToRoot();
 }
 
 
@@ -713,17 +767,38 @@ void handleRoot() {
     server.sendContent(F("</h3>"));
   #endif
 
+  server.sendContent(F("<form method='POST' action='/set-chip-type' style='margin:0 0 12px 0'>"));
+  server.sendContent(F("<label for='chipTypeSelect' style='margin:0 0 6px'>Chip Type</label>"));
+  server.sendContent(F("<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'>"));
+  server.sendContent(F("<select id='chipTypeSelect' name='chip_type' style='display:block;width:160px;padding:12px;background:#0b1220;border:1px solid #334155;color:#e2e8f0;border-radius:10px;box-sizing:border-box'>"));
+  for (size_t i = 0; i < kChipTypeCount; ++i) {
+    server.sendContent(F("<option value='"));
+    server.sendContent(String(i));
+    server.sendContent(F("'"));
+    if (i == currentChipTypeIndex) {
+      server.sendContent(F(" selected"));
+    }
+    server.sendContent(F(">"));
+    server.sendContent(htmlEscape(String(kChipTypeNames[i])));
+    server.sendContent(F("</option>"));
+  }
+  server.sendContent(F("</select>"));
+  server.sendContent(F("<button type='submit' style='margin-top:0'>Set</button>"));
+  server.sendContent(F("</div>"));
+  server.sendContent(F("</form>"));
+
   server.sendContent(F("<form id='uploadForm' method='POST' action='/upload' enctype='multipart/form-data'>"));
-  server.sendContent(F("<table style='width:100%;border-collapse:separate;border-spacing:8px 6px;margin:0'><tr>"));
-  server.sendContent(F("<td style='padding:0;width:78%'><label for='binfile' style='display:block;margin:0 0 6px'>Binary file</label><input id='binfile' name='binfile' type='file' accept='.bin,.bit,.rom,application/octet-stream' required></td>"));
-  server.sendContent(F("<td style='padding:0;width:22%'><label for='uploadStart' style='display:block;margin:0 0 6px'>Start (dec/0x)</label><input id='uploadStart' name='start' type='text' value='"));
+  server.sendContent(F("<table style='width:100%;border-collapse:collapse;margin:6px 0'><tr>"));
+  server.sendContent(F("<td style='padding:0 4px 0 0;width:78%;box-sizing:border-box'><label for='binfile' style='display:block;margin:0 0 6px'>Binary file</label><input id='binfile' name='binfile' type='file' accept='.bin,.bit,.rom,application/octet-stream' required></td>"));
+  server.sendContent(F("<td style='padding:0 0 0 4px;width:22%;box-sizing:border-box'><label for='uploadStart' style='display:block;margin:0 0 6px'>Start (dec/0x)</label><input id='uploadStart' name='start' type='text' value='"));
   server.sendContent(htmlEscape(formatAddressForInput(lastUploadStartAddr)));
   server.sendContent(F("' maxlength='10' style='max-width:11ch' required></td>"));
   server.sendContent(F("</tr></table>"));
   server.sendContent(F("<input id='uploadName' name='uploadName' type='hidden' value=''>"));
   server.sendContent(F("</form>"));
   server.sendContent(F("<div class='upload-actions-row' style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'>"));
-  server.sendContent(F("<button id='uploadButton' type='submit' form='uploadForm'>Upload and stream</button>"));
+  // Fixed min-width keeps size stable when the caption switches to "Uploading..."
+  server.sendContent(F("<button id='uploadButton' type='submit' form='uploadForm' style='min-width:19ch;text-align:center'>Upload and stream</button>"));
   server.sendContent(F("<form method='POST' action='/erase-eprom' style='margin:0' onsubmit=\"return confirm('Erase Device Memory now?');\">"));
   server.sendContent(F("<button type='submit' style='background:#ef4444;color:#ffffff'>Erase Device Memory</button>"));
   server.sendContent(F("</form>"));
@@ -736,14 +811,15 @@ void handleRoot() {
   server.sendContent(F("</div>"));
 
   #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6) 
-    server.sendContent(F("<h3>Dump EPROM</h3>"));
+    server.sendContent(F("<h3>Dump Emulation RAM</h3>"));
     server.sendContent(F("<form method='POST' action='/dump-eprom'>"));
-    server.sendContent(F("<table style='width:100%;border-collapse:separate;border-spacing:8px 6px;margin:0'><tr>"));
-    server.sendContent(F("<td style='padding:0;width:50%'><label for='dumpFilename' style='display:block;margin:0 0 6px'>Filename</label><input id='dumpFilename' name='filename' type='text' value='eprom_dump.bin' required></td>"));
-    server.sendContent(F("<td style='padding:0;width:28%'><label for='dumpStart' style='display:block;margin:0 0 6px'>Start (dec/0x)</label><input id='dumpStart' name='start' type='text' value='0x0000' required></td>"));
-    server.sendContent(F("<td style='padding:0;width:22%'><label for='dumpLen' style='display:block;margin:0 0 6px'>Length</label><input id='dumpLen' name='len' type='text' value='4096' required></td>"));
+    server.sendContent(F("<table style='width:100%;border-collapse:collapse;margin:6px 0'><tr>"));
+    server.sendContent(F("<td style='padding:0 4px 0 0;width:40%;box-sizing:border-box'><label for='dumpFilename' style='display:block;margin:0 0 6px'>Filename</label><input id='dumpFilename' name='filename' type='text' value='ram_dump.bin' required></td>"));
+    server.sendContent(F("<td style='padding:0 4px;width:20%;box-sizing:border-box'><label for='dumpStart' style='display:block;margin:0 0 6px'>Start (dec/0x)</label><input id='dumpStart' name='start' type='text' value='0x0000' required></td>"));
+    server.sendContent(F("<td style='padding:0 0 0 4px;width:20%;box-sizing:border-box'><label for='dumpLen' style='display:block;margin:0 0 6px'>Length</label><input id='dumpLen' name='len' type='text' value='4096' required></td>"));
+    server.sendContent(F("<td style='padding:0 0 0 8px;width:20%;box-sizing:border-box;vertical-align:bottom'><div style='height:43px;display:flex;align-items:center'><button type='submit' style='display:inline-flex;align-items:center;justify-content:center;width:100%;margin:0'>Dump RAM</button></div></td>"));
     server.sendContent(F("</tr></table>"));
-    server.sendContent(F("<button type='submit'>Dump EPROM</button></form>"));
+    server.sendContent(F("</form>"));
   #endif
 
   size_t fsTotalBytes = 0;
@@ -763,6 +839,9 @@ void handleRoot() {
       fsFreeKiB = fsFreeBytes / 1024;
     }
   }
+  const String chipTypeLabel = (currentChipTypeIndex < kChipTypeCount)
+                                   ? String(kChipTypeNames[currentChipTypeIndex])
+                                   : String("unknown");
 
   server.sendContent(F("<h2>Status</h2><ul class='status-list'>"));
   server.sendContent(F("<li>Wi-Fi Mode: <code>"));
@@ -779,6 +858,8 @@ void handleRoot() {
   server.sendContent(String(lastFileBytes));
   server.sendContent(F("</code> Start: <code>"));
   server.sendContent(formatAddressForInput(lastUploadStartAddr));
+  server.sendContent(F("</code> Chip Type: <code>"));
+  server.sendContent(htmlEscape(chipTypeLabel));
   server.sendContent(F("</code></li>"));
   server.sendContent(F("<li>File System: <code id='stFsUsed'>"));
   server.sendContent(String(fsUsedKiB));
@@ -883,12 +964,14 @@ void handleStreamFile() {
   }
 
   const bool stagedIsBitstream = isBitstreamFilePath(path);
-  if (!startPlaybackFromStaging(startAddr)) {
+
+  if (!startPlaybackFromStaging(startAddr, path)) {
     pendingMessage = stagedIsBitstream ? F("Cannot config: failed to process file.")
                                        : F("Cannot stream: failed to send file.");
     redirectToRoot();
     return;
   }
+  lastStreamedStartAddr = startAddr;
 
   if (!saveStartAddressForFile(path, startAddr)) {
     pendingMessage = F("Selected file sent, but start address could not be saved.");
@@ -1049,7 +1132,6 @@ void handleEraseEprom() {
     redirectToRoot();
     return;
   }
-
   eraseEPROM();
   pendingMessage = F("EPROM erased.");
   redirectToRoot();
@@ -1200,7 +1282,8 @@ void handleUpload() {
 
   if (upload.status == UPLOAD_FILE_START) {
     setUploadLed(true);
-    set_static_message(F("upl"));
+    dy1message(F("upl"));
+    drawStringBox("Upload", "File", 0);
     currentUploadFsError = false;
 
     DPRINT(F("Upload start: "));
@@ -1309,7 +1392,7 @@ void handleUploadDone() {
     } else {
       if (isNonStreamableFilePath(currentFilePath)) {
         message = F("Upload stored. Streaming skipped for .css/.html file types.");
-      } else if (!startPlaybackFromStaging(webUploadStartAddr)) {
+      } else if (!startPlaybackFromStaging(webUploadStartAddr, currentFilePath)) {
         message = isBitstreamFilePath(currentFilePath)
                       ? F("Upload failed: could not configure staged file.")
                       : F("Upload failed: could not stream staged file.");
@@ -1318,6 +1401,7 @@ void handleUploadDone() {
       if (message.length() == 0) {
         lastFilename = baseNameFromPath(currentFilePath);
         lastUploadStartAddr = webUploadStartAddr;
+        lastStreamedStartAddr = webUploadStartAddr;
         if (isBitstreamFilePath(currentFilePath)) {
           startupFpgaPath = normalizeFsPath(currentFilePath);
         }
@@ -1334,7 +1418,7 @@ void handleUploadDone() {
       }
     }
   }
-  set_rdy_message();
+  readyMessage();
 
   pendingMessage = message;
   redirectToRoot();
@@ -1392,6 +1476,7 @@ void serverInit() {
     #ifndef JTAG_SPARTAN6
       digitalWrite(LED_SENDDATA, LOW);
     #endif
+    drawMsgBox(F("Warning:"), F("Fallback to AP"), DB_ERROR, 1000);
   }
 #else
   Serial.print(F("Wi-Fi in AP mode"));
@@ -1414,6 +1499,7 @@ void serverInit() {
   server.on("/settings-data", HTTP_GET, handleSettingsData);
   server.on("/save-settings", HTTP_POST, handleSaveSettings);
   server.on("/download-file", HTTP_GET, handleDownloadFile);
+  server.on("/set-chip-type", HTTP_POST, handleSetChipType);
   server.on("/stream-file", HTTP_POST, handleStreamFile);
   server.on("/delete-file", HTTP_POST, handleDeleteFile);
   server.on("/reset-settings", HTTP_POST, handleResetSettings);

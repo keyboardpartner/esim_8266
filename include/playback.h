@@ -17,40 +17,43 @@
 #include <Arduino.h>
 
 // Opens the staged file and sends it in one blocking pass.
-bool startPlaybackFromStaging(uint32_t startAddr) {
+bool startPlaybackFromStaging(uint32_t startAddr, const String &filePath) {
   Serial.print(F("\rReplay...  "));
-  if (!fsMounted || stagedFileBytes == 0 || currentFilePath.length() == 0 || !LittleFS.exists(currentFilePath)) {
+  if (!fsMounted || stagedFileBytes == 0 || filePath.length() == 0 || !LittleFS.exists(filePath)) {
     Serial.println(F("No file to send."));
     return false;
   }
 
-  if (isNonStreamableFilePath(currentFilePath)) {
+  if (isNonStreamableFilePath(filePath)) {
     Serial.println(F("Skipping playback: .css/.html files are not streamable."));
     return false;
   }
   #ifdef JTAG_SPARTAN6
-    if (isBitstreamFilePath(currentFilePath)) {
-      set_static_message(F("cfg"));
-      jtagConfigure(currentFilePath);
+    if (isBitstreamFilePath(filePath)) {
+      dy1message(F("cfg"));
+      drawStringBox("FPGA Cfg", filePath, 0);
+      jtagConfigure(filePath);
       printIDcode();
-      set_rdy_message();
+      currentChipTypeIndex = kInvalidChipTypeIndex; // reset to invalid index, meaning no chip type selected
+      eraseEPROMsilent(); // erase the EEPROM after configuring the FPGA
+      outputChipType(kInvalidChipTypeIndex); // output invalid chip type
+      readyMessage();
       return true;
     }
   #endif
+  lastStreamedStartAddr = startAddr;
 
-  File playbackFile = LittleFS.open(currentFilePath, "r");
+  File playbackFile = LittleFS.open(filePath, "r");
   if (!playbackFile) {
     Serial.println(F("Failed to open playback file."));
-    #ifdef USE_DY1_DISPLAY
-      set_static_message(F("Fnf"));
-      delay(1000);
-    #endif
+    dy1message(F("Fnf"));
+    drawMsgBox(F("Error"), F("File not found"), DB_ERROR, 2000);
     return false;
   }
   size_t playbackBytesSent = 0;
 
   Serial.print(F("File: "));
-  Serial.print(currentFilePath);
+  Serial.print(filePath);
   Serial.print(F(", startAddr=0x"));
   Serial.print(startAddr, HEX);
 
@@ -62,7 +65,10 @@ bool startPlaybackFromStaging(uint32_t startAddr) {
 
   streamOffset = 0;
   setUpSendLed(true);
-  set_static_message(F("rpl"));
+  dy1message(F("rpl"));
+  drawStringBox(filePath, "Sent to 0x" + String(startAddr, HEX), 0);
+
+  outputChipType(currentChipTypeIndex);
   
   startBlockTransfer(startAddr);
   while (playbackFile.available()) {
@@ -87,7 +93,7 @@ bool startPlaybackFromStaging(uint32_t startAddr) {
 #if defined(DEBUG)
   const uint32_t elapsedMs = millis() - playbackStartMs;
   DPRINT(F("Playback done: file="));
-  DPRINT(currentFilePath);
+  DPRINT(filePath);
   DPRINT(F(", bytes="));
   DPRINT(playbackBytesSent);
   DPRINT(F(", elapsed_ms="));
@@ -99,12 +105,10 @@ bool startPlaybackFromStaging(uint32_t startAddr) {
     DPRINTLN(F("n/a"));
   }
 #endif
-  #ifdef USE_DY1_DISPLAY
-    if (playbackBytesSent < 16384) {
-      delay(500);
-    }
-    set_rdy_message();
-  #endif
+  if (playbackBytesSent < 16384) {
+      delay(1000);
+  }
+  readyMessage();
   setUpSendLed(false);
   clearDataBus();
   return true;
