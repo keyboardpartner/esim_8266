@@ -24,7 +24,7 @@ This version can also be used as RAM emulator for 6264 or 62256 SRAMs, like the 
 
 ### 0.96" TFT Support
 
-A 0.96" TFT (optional) displays status messages and IP info for the MOJO version. The TFT will work on other versions, too, but only the MOJO PCB provides installation.
+A 0.96" TFT (optional) displays status messages, IP number, FPGA image version, file used, device emulated and start address info for the MOJO version. The TFT will work on other versions (instead of DY1 display) too, but only the MOJO PCB provides installation.
 
 
 ### ESIM Support
