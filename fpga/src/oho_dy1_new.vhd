@@ -102,9 +102,6 @@ dy_update <= '1' ;
 
 
 -- define string with 16 digits respectively
-dy_data(0) <= hex & dp0 & "000" & DIGIT_R; -- rechte Ziffer
-dy_data(1) <= hex & dp1 & "000" & DIGIT_M; -- Mitte
-dy_data(2) <= hex & dp2 & "000" & DIGIT_L; -- linke Ziffer
 dp0 <=  clkdiv(23);
 
 ---- erstes Display
@@ -131,6 +128,9 @@ begin
     TICK_12HZ <= '0';
     if (countbit = '1') and (countbit_del = '0') then
       TICK_12HZ <= '1'; -- 11,71875 Hz
+		dy_data(0) <= hex & dp0 & "000" & DIGIT_R; -- rechte Ziffer
+		dy_data(1) <= hex & dp1 & "000" & DIGIT_M; -- Mitte
+		dy_data(2) <= hex & dp2 & "000" & DIGIT_L; -- linke Ziffer
 	 end if;
     countbit_del <= countbit;
   end if;

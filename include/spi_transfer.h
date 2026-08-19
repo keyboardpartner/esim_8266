@@ -186,8 +186,6 @@ void setUpSendLed(bool on) {
       Serial.println(inputByte(), HEX);
     }
     stopBlockTransfer();
-    delay(500);
-    readyMessage();
   }
 #endif
 
@@ -334,13 +332,13 @@ void setUpSendLed(bool on) {
 // Sends chip type ID (0..15) to device output for GODIL/JTAG modes.
 // Other modes ignore this setting.
 void outputChipType(uint32_t value) {
-#if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
-  digitalWrite(LATCH_PIN, LOW);
-  SPI.write32((value & 0x0F) | setChipType); // set chip type command
-  digitalWrite(LATCH_PIN, HIGH);
-#else
-  (void)value;
-#endif
+  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+    digitalWrite(LATCH_PIN, LOW);
+    SPI.write32((value & 0x0F) | setChipType); // set chip type command
+    digitalWrite(LATCH_PIN, HIGH);
+  #else
+    (void)value;
+  #endif
 }
 
 void eraseEPROMsilent() {

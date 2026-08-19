@@ -1,0 +1,8 @@
+select figure at 1451 775 8 -wires -sn=1
+select figure at 1503 760 8 -wires -sn=1
+select figure at 414 1828 8 -wires -sn=1
+select figure at 968 1564 8 -wires -sn=1
+select figure at 2577 1084 8 -wires -sn=1
+move iomarker at 2544 1072 to 3136 1072 R0 -keepConn -sn=1
+select figure at 2582 1514 8 -wires -sn=1
+select figure at 290 1350 8 -wires -sn=1

@@ -34,6 +34,16 @@
     <file xil_pn:fileType="FILE_XST_STX" xil_pn:name="bram_wrapper.stx"/>
     <file xil_pn:fileType="FILE_SYMBOL" xil_pn:name="bram_wrapper.sym" xil_pn:origination="imported"/>
     <file xil_pn:fileType="FILE_XST" xil_pn:name="bram_wrapper.xst"/>
+    <file xil_pn:fileType="FILE_XST_PROJECT" xil_pn:name="dcm_wrapper.prj"/>
+    <file xil_pn:fileType="FILE_SPL" xil_pn:name="dcm_wrapper.spl"/>
+    <file xil_pn:fileType="FILE_XST_STX" xil_pn:name="dcm_wrapper.stx"/>
+    <file xil_pn:fileType="FILE_SYMBOL" xil_pn:name="dcm_wrapper.sym" xil_pn:origination="imported"/>
+    <file xil_pn:fileType="FILE_XST" xil_pn:name="dcm_wrapper.xst"/>
+    <file xil_pn:fileType="FILE_XST_PROJECT" xil_pn:name="dcm_x2.prj"/>
+    <file xil_pn:fileType="FILE_SPL" xil_pn:name="dcm_x2.spl"/>
+    <file xil_pn:fileType="FILE_XST_STX" xil_pn:name="dcm_x2.stx"/>
+    <file xil_pn:fileType="FILE_SYMBOL" xil_pn:name="dcm_x2.sym" xil_pn:origination="imported"/>
+    <file xil_pn:fileType="FILE_XST" xil_pn:name="dcm_x2.xst"/>
     <file xil_pn:fileType="FILE_SPL" xil_pn:name="demo_dy1_new.spl"/>
     <file xil_pn:fileType="FILE_SYMBOL" xil_pn:name="demo_dy1_new.sym" xil_pn:origination="imported"/>
     <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_BITGEN_REPORT" xil_pn:name="fpga_main.bgn" xil_pn:subbranch="FPGAConfiguration"/>
@@ -76,6 +86,8 @@
     <file xil_pn:fileType="FILE_FITTER_REPORT" xil_pn:name="fpga_main_summary.xml"/>
     <file xil_pn:fileType="FILE_WEBTALK" xil_pn:name="fpga_main_usage.xml"/>
     <file xil_pn:fileType="FILE_XRPT" xil_pn:name="fpga_main_xst.xrpt"/>
+    <file xil_pn:fileType="FILE_LOG" xil_pn:name="ipcore_dir/coregen.log"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_VHDL" xil_pn:name="ipcore_dir/dcm_x2.vhd" xil_pn:origination="imported"/>
     <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_NGC" xil_pn:name="ipcore_dir/sram_64k.ngc" xil_pn:origination="imported"/>
     <file xil_pn:fileType="FILE_SYMBOL" xil_pn:name="ipcore_dir/sram_64k.sym" xil_pn:origination="imported"/>
     <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_VHDL" xil_pn:name="ipcore_dir/sram_64k.vhd" xil_pn:origination="imported"/>
@@ -96,14 +108,15 @@
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
     </transform>
-    <transform xil_pn:end_ts="1786791547" xil_pn:in_ck="-5656884817765536752" xil_pn:name="TRAN_schematicsToHdl" xil_pn:prop_ck="1799179312685805542" xil_pn:start_ts="1786791545">
+    <transform xil_pn:end_ts="1786864032" xil_pn:in_ck="-5656884817765536752" xil_pn:name="TRAN_schematicsToHdl" xil_pn:prop_ck="1799179312685805542" xil_pn:start_ts="1786864032">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
       <outfile xil_pn:name="fpga_main.vhf"/>
     </transform>
-    <transform xil_pn:end_ts="1786542911" xil_pn:in_ck="2557477862900444846" xil_pn:name="TRAN_regenerateCores" xil_pn:prop_ck="-7947470168599256003" xil_pn:start_ts="1786542909">
+    <transform xil_pn:end_ts="1786864034" xil_pn:in_ck="-2946765723890340302" xil_pn:name="TRAN_regenerateCores" xil_pn:prop_ck="-7947470168599256003" xil_pn:start_ts="1786864032">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
+      <outfile xil_pn:name="ipcore_dir/dcm_x2.vhd"/>
       <outfile xil_pn:name="ipcore_dir/sram_64k.ngc"/>
       <outfile xil_pn:name="ipcore_dir/sram_64k.vhd"/>
     </transform>
@@ -123,7 +136,7 @@
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
     </transform>
-    <transform xil_pn:end_ts="1786791554" xil_pn:in_ck="-9142950463096677029" xil_pn:name="TRANEXT_xstsynthesize_spartan6" xil_pn:prop_ck="-1079730045183259153" xil_pn:start_ts="1786791547">
+    <transform xil_pn:end_ts="1786864043" xil_pn:in_ck="-7723021485999279269" xil_pn:name="TRANEXT_xstsynthesize_spartan6" xil_pn:prop_ck="-1079730045183259153" xil_pn:start_ts="1786864034">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>
@@ -142,11 +155,11 @@
       <outfile xil_pn:name="webtalk_pn.xml"/>
       <outfile xil_pn:name="xst"/>
     </transform>
-    <transform xil_pn:end_ts="1786791407" xil_pn:in_ck="2754492543539085603" xil_pn:name="TRAN_compileBCD2" xil_pn:prop_ck="-8119206654087425788" xil_pn:start_ts="1786791407">
+    <transform xil_pn:end_ts="1786864043" xil_pn:in_ck="-1195738005753271237" xil_pn:name="TRAN_compileBCD2" xil_pn:prop_ck="-8119206654087425788" xil_pn:start_ts="1786864043">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
     </transform>
-    <transform xil_pn:end_ts="1786791564" xil_pn:in_ck="-3363281043330355833" xil_pn:name="TRANEXT_ngdbuild_FPGA" xil_pn:prop_ck="-7652419120793663512" xil_pn:start_ts="1786791554">
+    <transform xil_pn:end_ts="1786864059" xil_pn:in_ck="-3363281043330355833" xil_pn:name="TRANEXT_ngdbuild_FPGA" xil_pn:prop_ck="-7652419120793663512" xil_pn:start_ts="1786864043">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
       <outfile xil_pn:name="_ngo"/>
@@ -155,7 +168,7 @@
       <outfile xil_pn:name="fpga_main.ngd"/>
       <outfile xil_pn:name="fpga_main_ngdbuild.xrpt"/>
     </transform>
-    <transform xil_pn:end_ts="1786791570" xil_pn:in_ck="6163250543148397900" xil_pn:name="TRANEXT_map_spartan6" xil_pn:prop_ck="6093601622908603872" xil_pn:start_ts="1786791564">
+    <transform xil_pn:end_ts="1786864070" xil_pn:in_ck="6163250543148397900" xil_pn:name="TRANEXT_map_spartan6" xil_pn:prop_ck="6093601622908603872" xil_pn:start_ts="1786864059">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
       <outfile xil_pn:name="_xmsgs/map.xmsgs"/>
@@ -168,7 +181,7 @@
       <outfile xil_pn:name="fpga_main_summary.xml"/>
       <outfile xil_pn:name="fpga_main_usage.xml"/>
     </transform>
-    <transform xil_pn:end_ts="1786791596" xil_pn:in_ck="-6710198683947857307" xil_pn:name="TRANEXT_par_spartan6" xil_pn:prop_ck="-6780099238861732004" xil_pn:start_ts="1786791570">
+    <transform xil_pn:end_ts="1786864091" xil_pn:in_ck="-6710198683947857307" xil_pn:name="TRANEXT_par_spartan6" xil_pn:prop_ck="-6780099238861732004" xil_pn:start_ts="1786864070">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
       <outfile xil_pn:name="_xmsgs/par.xmsgs"/>
@@ -182,7 +195,7 @@
       <outfile xil_pn:name="fpga_main_pad.txt"/>
       <outfile xil_pn:name="fpga_main_par.xrpt"/>
     </transform>
-    <transform xil_pn:end_ts="1786791606" xil_pn:in_ck="-8519601349141564731" xil_pn:name="TRANEXT_bitFile_spartan6" xil_pn:prop_ck="7409057953864061986" xil_pn:start_ts="1786791596">
+    <transform xil_pn:end_ts="1786864099" xil_pn:in_ck="-8519601349141564731" xil_pn:name="TRANEXT_bitFile_spartan6" xil_pn:prop_ck="7409057953864061986" xil_pn:start_ts="1786864091">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>
@@ -195,7 +208,7 @@
       <outfile xil_pn:name="webtalk.log"/>
       <outfile xil_pn:name="webtalk_pn.xml"/>
     </transform>
-    <transform xil_pn:end_ts="1786791596" xil_pn:in_ck="6163250543148397768" xil_pn:name="TRAN_postRouteTrce" xil_pn:prop_ck="445577401284416185" xil_pn:start_ts="1786791587">
+    <transform xil_pn:end_ts="1786864091" xil_pn:in_ck="6163250543148397768" xil_pn:name="TRAN_postRouteTrce" xil_pn:prop_ck="445577401284416185" xil_pn:start_ts="1786864086">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
       <outfile xil_pn:name="_xmsgs/trce.xmsgs"/>
