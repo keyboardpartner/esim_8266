@@ -22,7 +22,7 @@ For MOJO-like boards with Xilinx XC9SLX9 FPGA, ensure the correct bitstream (def
 
 This version can be used as RAM emulator for 6264 or 62256 SRAMs, like the GODIL version. Note that MOJO **does not provide logic level translators**. I think a 220R resistor in series to each logic line will do, protecting inputs from host circuit's 5V levels. Tested with several old home computers; seems they all work with 3.3V logic levels.
 
-The MOJO version supports the following devices: 2716, 2732, 2764, 27128, 27256 and 27512 EPROMs, 2532 EPROMs, 2332 and 2364 PROMs, 6116, 6264 and 62256 SRAMs. I also plan for a MOS 6502 emulation with monitor functions.
+The MOJO version supports the following devices: 2716, 2732, 2764, 27128, 27256 and 27512 EPROMs, 2532 EPROMs, 2332 and 2364 PROMs, 6116, 6264 and 62256 SRAMs, PicoBlaze 3 and 6 core ROMs. I also plan for a MOS 6502 emulation with monitor functions.
 
 ### 0.96" TFT Support
 

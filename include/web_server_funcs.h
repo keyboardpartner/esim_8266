@@ -555,6 +555,11 @@ void handleSetChipType() {
 #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
   outputChipType(selectedIndex);
   currentChipTypeIndex = static_cast<uint8_t>(selectedIndex);
+  if (currentChipTypeIndex >= 10) {
+    webUploadStartAddr = 0;
+    lastUploadStartAddr = 0;
+    lastStreamedStartAddr = 0;
+  }
   if (!saveGlobalSettings()) {
     pendingMessage = F("Chip type set, but defaults could not be saved.");
   } else {
@@ -621,7 +626,9 @@ void sendFsDirectoryHtmlStreamed() {
     row += F("<tr>");
     row += F("<td style='padding:6px 8px;border-bottom:1px solid #1f2937'><a href='/download-file?path=");
     row += urlEncodeComponent(path);
-    row += F("' style='color:#93c5fd;text-decoration:none'><code>");
+    row += isBitstreamFilePath(path)
+           ? F("' style='color:#f59e0b;text-decoration:none'><code>")
+           : F("' style='color:#93c5fd;text-decoration:none'><code>");
     row += htmlEscape(displayText);
     row += F("</code></a></td>");
     row += F("<td style='padding:6px 8px;text-align:right;border-bottom:1px solid #1f2937'>");

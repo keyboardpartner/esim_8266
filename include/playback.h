@@ -34,6 +34,9 @@ bool startPlaybackFromStaging(uint32_t startAddr, const String &filePath) {
       startAddr = 0;
     }
     if (isBitstreamFilePath(filePath)) {
+      webUploadStartAddr = 0;
+      lastUploadStartAddr = 0;
+      lastStreamedStartAddr = 0;
       dy1message(F("cfg"));
       drawStringBox("FPGA Cfg", filePath, 0);
       jtagConfigure(filePath);

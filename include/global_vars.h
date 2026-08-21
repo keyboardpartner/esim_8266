@@ -154,19 +154,19 @@ constexpr const char *kGlobalSettingsPath = "/.settings.ini";
 constexpr size_t kMaxGlobalSettingsBytes = 1024;
 
 constexpr const char *kChipTypeNames[] = {
-  "2716", // 0
-  "2732", // 1
-  "2764", // 2
+  "2716",  // 0
+  "2732",  // 1
+  "2764",  // 2
   "27128", // 3
   "27256", // 4
   "27512", // 5
-  "2532", // 6
-  "2364", // 7
-  "6116", // 8
-  "6264", // 9
+  "2532",  // 6
+  "2364",  // 7
+  "6116",  // 8
+  "6264",  // 9
   "62256", // 10
-  "KCPSM3", // 11
-  "KCPSM6", // 12
+  "KCPB3", // 11
+  "KCPB6", // 12
   "(none)"
 };
 constexpr uint32_t kMaxBytesToTransfer[] = {
@@ -181,8 +181,8 @@ constexpr uint32_t kMaxBytesToTransfer[] = {
   2048,   // 6116
   8192,   // 6264
   32768,  // 62256
-  4096,   // KCPSM3  - 1024 18 Bit Words = 4096 Bytes
-  16384,  // KCPSM6
+  4096,   // KCPB3  - 1024 18 Bit Words = 4096 Bytes
+  16384,  // KCPB6  - 4096 18 Bit Words = 16384 Bytes
   4096,   // none
 };
 

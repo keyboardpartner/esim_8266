@@ -1,0 +1,82 @@
+                     ; ##############
+                     ; Picoblaze Test
+                     ; ##############
+                     ;
+                     CONSTANT PORT0, 00
+                     CONSTANT PORT1, 01
+                     ; SCRATCHPAD RAM
+                     CONSTANT digit_0, 00
+                     CONSTANT digit_1, 01
+                     CONSTANT digit_2, 02
+                     ;
+                     ;
+         cold_start: 
+                     LOAD s0, 00
+                     STORE s0, digit_0
+                     STORE s0, digit_1
+                     STORE s0, digit_2
+               loop: 
+                     FETCH s0, digit_1
+                     SL0 s0
+                     SL0 s0
+                     SL0 s0
+                     SL0 s0
+                     FETCH s1, digit_0
+                     AND s1, 0F
+                     OR s0, s1
+                     OUTPUT s0, PORT0
+                     ;
+                     FETCH s0, digit_2
+                     AND s0, 0F
+                     OUTPUT s0, PORT1
+                     ;
+                     CALL inc_decimal
+                     CALL wait_very_long
+                     JUMP loop
+                     ;
+        inc_decimal: 
+                     FETCH s0, digit_0
+                     ADD s0, 01
+                     STORE s0, digit_0
+                     COMPARE s0, 0A
+                     RETURN NZ
+                     LOAD s0, 00
+                     STORE s0, digit_0
+                     FETCH s0, digit_1
+                     ADD s0, 01
+                     STORE s0, digit_1
+                     COMPARE s0, 0A
+                     RETURN NZ
+                     LOAD s0, 00
+                     STORE s0, digit_1
+                     FETCH s0, digit_2
+                     ADD s0, 01
+                     STORE s0, digit_2
+                     COMPARE s0, 0A
+                     RETURN NZ
+                     LOAD s0, 00
+                     STORE s0, digit_2
+                     RETURN 
+                     ;
+     wait_very_long: 
+                     LOAD s2, 15
+wait_very_long_loop: 
+                     CALL wait_long
+                     SUB s2, 01
+                     JUMP NZ, wait_very_long_loop
+                     RETURN 
+                     ;
+          wait_long: 
+                     LOAD s1, FF
+     wait_long_loop: 
+                     CALL wait_256
+                     SUB s1, 01
+                     JUMP NZ, wait_long_loop
+                     RETURN 
+                     ;
+           wait_256: 
+                     LOAD s0, FF
+      wait_256_loop: 
+                     SUB s0, 01
+                     JUMP NZ, wait_256_loop
+                     RETURN 
