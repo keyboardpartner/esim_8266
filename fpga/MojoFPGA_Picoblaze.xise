@@ -51,12 +51,12 @@
       <association xil_pn:name="BehavioralSimulation" xil_pn:seqID="22"/>
       <association xil_pn:name="Implementation" xil_pn:seqID="3"/>
     </file>
-    <file xil_pn:name="../src/mojo.ucf" xil_pn:type="FILE_UCF">
-      <association xil_pn:name="Implementation" xil_pn:seqID="0"/>
-    </file>
     <file xil_pn:name="../src/bram_wrapper_pb6.vhd" xil_pn:type="FILE_VHDL">
       <association xil_pn:name="BehavioralSimulation" xil_pn:seqID="86"/>
-      <association xil_pn:name="Implementation" xil_pn:seqID="86"/>
+      <association xil_pn:name="Implementation" xil_pn:seqID="9"/>
+    </file>
+    <file xil_pn:name="../src/mojo_picoblaze.ucf" xil_pn:type="FILE_UCF">
+      <association xil_pn:name="Implementation" xil_pn:seqID="91"/>
     </file>
     <file xil_pn:name="ipcore_dir/pb_ram.xise" xil_pn:type="FILE_COREGENISE">
       <association xil_pn:name="Implementation" xil_pn:seqID="0"/>
@@ -94,7 +94,7 @@
   </properties>
 
   <bindings>
-    <binding xil_pn:location="/mojo_pb_test" xil_pn:name="../src/mojo.ucf"/>
+    <binding xil_pn:location="/mojo_pb_test" xil_pn:name="../src/mojo_picoblaze.ucf"/>
   </bindings>
 
   <libraries/>
