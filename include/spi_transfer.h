@@ -39,13 +39,15 @@ void setUpSendLed(bool on) {
   // 0xC "1100xxxx xxxxxxxx xxxxxxxx xxxxxxxx" = read ID/version command
   // 0x0 "0000xxxx xxxxxxxx xxxxxxxx xxxxxxxx" = SPI read cycle, return data from last read command
 
-  constexpr uint32_t setAddrCmd   = 0x20000000; // set address command
+  constexpr uint32_t setAddrCmd     = 0x20000000; // set address command
   constexpr uint32_t setAddrCmdAutoInc = 0x30000000; // set address command with autoinc after next read or write
-  constexpr uint32_t writeDataCmd = 0x80000000; // write data command
-  constexpr uint32_t readDataCmd  = 0x40000000; // read data command
-  constexpr uint32_t readCycle  = 0x00000000; // read data command
+  constexpr uint32_t writeDataCmd   = 0x80000000; // write data command
+  constexpr uint32_t readDataCmd    = 0x40000000; // read data command
+  constexpr uint32_t readCycle      = 0x00000000; // read data command
   constexpr uint32_t readVersionCmd = 0xC0000000; // read ID/version command
-  constexpr uint32_t setChipType = 0xA0000000; // set chip type command
+  constexpr uint32_t setChipType    = 0xA0000000; // set chip type command
+  constexpr uint32_t SetResetCmd    = 0xF0000000; // set reset command
+  constexpr uint32_t ClearResetCmd  = 0xE0000000; // clear reset command
 
   // Clears all output bits on the shift register, go to emulation mode
   void clearDataBus() {
@@ -56,11 +58,19 @@ void setUpSendLed(bool on) {
     digitalWrite(LATCH_PIN, LOW);
     SPI.write32(txlong); // set address to read or write
     digitalWrite(LATCH_PIN, HIGH);
+    delayMicroseconds(1); // wait for FPGA to process the command
+    digitalWrite(LATCH_PIN, LOW);
+    SPI.write32(SetResetCmd); // set address to read or write
+    digitalWrite(LATCH_PIN, HIGH);
   }
 
   void stopBlockTransfer() {
     digitalWrite(LATCH_PIN, LOW);
     SPI.write32(setAddrCmd); // set address
+    digitalWrite(LATCH_PIN, HIGH);
+    delayMicroseconds(1); // wait for FPGA to process the command
+    digitalWrite(LATCH_PIN, LOW);
+    SPI.write32(ClearResetCmd); // set address to read or write
     digitalWrite(LATCH_PIN, HIGH);
   }
 
@@ -343,7 +353,7 @@ void outputChipType(uint32_t value) {
 
 void eraseEPROMsilent() {
   startBlockTransfer(0);
-  for (uint32_t i = 0; i < maxBytesToTransfer; ++i) {
+  for (uint32_t i = 0; i < kMaxBytesToTransfer[currentChipTypeIndex]; ++i) {
     outputByte(0xFF);
     if ((i & 0xFF) == 0) {
       delay(0); yield();

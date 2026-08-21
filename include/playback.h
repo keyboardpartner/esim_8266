@@ -29,6 +29,10 @@ bool startPlaybackFromStaging(uint32_t startAddr, const String &filePath) {
     return false;
   }
   #ifdef JTAG_SPARTAN6
+    if (currentChipTypeIndex > 10) {
+      Serial.println(F("KCPSM 3/6 type, Start address set to 0."));
+      startAddr = 0;
+    }
     if (isBitstreamFilePath(filePath)) {
       dy1message(F("cfg"));
       drawStringBox("FPGA Cfg", filePath, 0);

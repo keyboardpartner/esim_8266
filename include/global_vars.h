@@ -130,14 +130,12 @@ void printCenteredSerial(const String &text, char padChar = '-') {
   #define DATA_PIN 13
   #define DATA_INVERT // bei invertierendem Bustreiber
   constexpr const char *kApSsid = "PEPS Uploader";
-  constexpr uint32_t maxBytesToTransfer = 16384; // 16KB for PEPS RAM
-#endif
+ #endif
 
 #ifdef JTAG_SPARTAN6
   #define LATCH_PIN 15 // FPGA SPI /SS
   #include "jtag_send.h"
   constexpr const char *kApSsid = "SPARTAN 6 Uploader";
-  constexpr uint32_t maxBytesToTransfer = 65536;
   uint32_t jtagIDcode = 0;
 #endif
 
@@ -156,22 +154,41 @@ constexpr const char *kGlobalSettingsPath = "/.settings.ini";
 constexpr size_t kMaxGlobalSettingsBytes = 1024;
 
 constexpr const char *kChipTypeNames[] = {
-  "2716",
-  "2732",
-  "2764",
-  "27128",
-  "27256",
-  "27512",
-  "2532",
-  "2364",
-  "6116",
-  "6264",
-  "62256",
+  "2716", // 0
+  "2732", // 1
+  "2764", // 2
+  "27128", // 3
+  "27256", // 4
+  "27512", // 5
+  "2532", // 6
+  "2364", // 7
+  "6116", // 8
+  "6264", // 9
+  "62256", // 10
+  "KCPSM3", // 11
+  "KCPSM6", // 12
   "(none)"
 };
+constexpr uint32_t kMaxBytesToTransfer[] = {
+  2048,   // 2716
+  4096,   // 2732
+  8192,   // 2764
+  16384,  // 27128
+  32768,  // 27256
+  65536,  // 27512
+  4096,   // 2532
+  8192,   // 2364
+  2048,   // 6116
+  8192,   // 6264
+  32768,  // 62256
+  4096,   // KCPSM3  - 1024 18 Bit Words = 4096 Bytes
+  16384,  // KCPSM6
+  4096,   // none
+};
+
 constexpr size_t kChipTypeCount = sizeof(kChipTypeNames) / sizeof(kChipTypeNames[0]);
-constexpr uint32_t kInvalidChipTypeIndex = 11; // default to 11, which is an invalid index, meaning no chip type selected
-uint32_t currentChipTypeIndex = kInvalidChipTypeIndex; // default to 11, which is an invalid index, meaning no chip type selected
+constexpr uint32_t kInvalidChipTypeIndex = 13; // default to 13, which is an invalid index, meaning no chip type selected
+uint32_t currentChipTypeIndex = kInvalidChipTypeIndex; // default to 13, which is an invalid index, meaning no chip type selected
 
 enum WifiMode {
   WifiMode_Unknown = 0,

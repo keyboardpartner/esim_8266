@@ -325,9 +325,9 @@ void processSerialUploadCommand() {
     return;
   }
 
-  if (payloadLength > maxBytesToTransfer) {
+  if (payloadLength > kMaxBytesToTransfer[currentChipTypeIndex]) {
     Serial.print(F("ERROR: payload exceeds limit "));
-    Serial.println(maxBytesToTransfer);
+    Serial.println(kMaxBytesToTransfer[currentChipTypeIndex]);
     return;
   }
 

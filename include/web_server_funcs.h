@@ -742,7 +742,7 @@ void handleRoot() {
     server.sendContent(F("<title>PEPS Binary Uploader</title>"));
   #endif
   #ifdef JTAG_SPARTAN6
-    server.sendContent(F("<title>FPGA Configurator and Uploader</title>"));
+    server.sendContent(F("<title>JTAG Configurator and Uploader</title>"));
   #endif
   server.sendContent(F("<link rel='stylesheet' href='/style.css'></head><body><div class='card'>"));
 
@@ -762,7 +762,7 @@ void handleRoot() {
     server.sendContent(F("</h3>"));
   #endif
   #ifdef JTAG_SPARTAN6
-    server.sendContent(F("<h1>XC6SLX9 FPGA JTAG Configurator and Uploader</h1><h3>by KeyboardPartner 7/2026, V. "));
+    server.sendContent(F("<h1>XILINX JTAG Configurator and Uploader</h1><h3>by KeyboardPartner 7/2026, V. "));
     server.sendContent(versionString);
     server.sendContent(F("</h3>"));
   #endif
@@ -789,7 +789,7 @@ void handleRoot() {
 
   server.sendContent(F("<form id='uploadForm' method='POST' action='/upload' enctype='multipart/form-data'>"));
   server.sendContent(F("<table style='width:100%;border-collapse:collapse;margin:6px 0'><tr>"));
-  server.sendContent(F("<td style='padding:0 4px 0 0;width:78%;box-sizing:border-box'><label for='binfile' style='display:block;margin:0 0 6px'>Binary file</label><input id='binfile' name='binfile' type='file' accept='.bin,.bit,.rom,application/octet-stream' required></td>"));
+  server.sendContent(F("<td style='padding:0 4px 0 0;width:78%;box-sizing:border-box'><label for='binfile' style='display:block;margin:0 0 6px'>Binary file</label><input id='binfile' name='binfile' type='file' accept='.bin,.bit,.dat,.rom,application/octet-stream' required></td>"));
   server.sendContent(F("<td style='padding:0 0 0 4px;width:22%;box-sizing:border-box'><label for='uploadStart' style='display:block;margin:0 0 6px'>Start (dec/0x)</label><input id='uploadStart' name='start' type='text' value='"));
   server.sendContent(htmlEscape(formatAddressForInput(lastUploadStartAddr)));
   server.sendContent(F("' maxlength='10' style='max-width:11ch' required></td>"));
@@ -1476,7 +1476,7 @@ void serverInit() {
     #ifndef JTAG_SPARTAN6
       digitalWrite(LED_SENDDATA, LOW);
     #endif
-    drawMsgBox(F("Warning:"), F("Fallback to AP"), DB_ERROR, 1000);
+    drawMsgBox(F("Warning:"), F("AP mode"), DB_ERROR, 1000);
   }
 #else
   Serial.print(F("Wi-Fi in AP mode"));

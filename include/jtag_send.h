@@ -75,6 +75,7 @@ uint8_t buf[MAX_BUF_SIZE];
 #define XILINX_JSTART_INSTR       (0x0C)  // 001100
 #define XILINX_JSHUTDOWN_INSTR    (0x0D)  // 001101 
 #define XILINX_S6LX9_IDCODE       (0x04001093)  // Spartan-6 LX9 FPGA device ID code
+#define XILINX_3S400_IDCODE       (0x0141C093)  // Spartan-3 S400 FPGA device ID code
 
 
 // ##############################################################################
