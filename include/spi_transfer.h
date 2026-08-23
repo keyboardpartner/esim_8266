@@ -31,81 +31,93 @@ void setUpSendLed(bool on) {
 }
 
 #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
-  // -- sample command and data on END_TICK signal
-  // 0x2 "0010xxxx aaaaaaaa aaaaaaaa aaaaaaaa" = set address command
-  // 0x3 "0011xxxx aaaaaaaa aaaaaaaa aaaaaaaa" = set address command with autoinc after next read or write
-  // 0x8 "1000xxxx xxxxxxxx xxxxxxxx dddddddd" = write data command
-  // 0x4 "0100xxxx xxxxxxxx xxxxxxxx xxxxxxxx" = read data command
-  // 0xC "1100xxxx xxxxxxxx xxxxxxxx xxxxxxxx" = read ID/version command
-  // 0x0 "0000xxxx xxxxxxxx xxxxxxxx xxxxxxxx" = SPI read cycle, return data from last read command
 
-  constexpr uint32_t setAddrCmd     = 0x20000000; // set address command
-  constexpr uint32_t setAddrCmdAutoInc = 0x30000000; // set address command with autoinc after next read or write
-  constexpr uint32_t writeDataCmd   = 0x80000000; // write data command
-  constexpr uint32_t readDataCmd    = 0x40000000; // read data command
-  constexpr uint32_t readCycle      = 0x00000000; // read data command
-  constexpr uint32_t readVersionCmd = 0xC0000000; // read ID/version command
-  constexpr uint32_t setChipType    = 0xA0000000; // set chip type command
-  constexpr uint32_t SetResetCmd    = 0xF0000000; // set reset command
-  constexpr uint32_t ClearResetCmd  = 0xE0000000; // clear reset command
+  #define SS_HIGH  GPOS = (1<<LATCH_PIN)
+  #define SS_LOW   GPOC = (1<<LATCH_PIN)
+
+  // x"00 AA AA AA" = set address command
+  // x"02 xx xx DD" = write RAM data command
+  // x"03 xx xx DD" = write RAM data command with autoinc after next write
+  // x"04 xx xx xx" = read RAM data command
+  // x"05 xx xx xx" = read RAM data command with autoinc after next read
+  // x"08 xx xx xx" = read ID/version command
+  // x"0A xx xx xx" = Set Type Select (CFG output nibble)
+  // x"0F xx xx xB" = Set Reset line to Bit 0, B = 0 oder 1
+  // x"4P xx xx DD" = Write Port P = 0..3
+
+  constexpr uint8_t setAddrCmd     = 0x00; // set address command
+  constexpr uint8_t writeDataCmd       = 0x02; // write RAM data command
+  constexpr uint8_t writeDataIncCmd    = 0x03; // write RAM data command with autoinc after next write
+  constexpr uint8_t readDataCmd    = 0x04; // read RAM data command
+  constexpr uint8_t readDataIncCmd    = 0x05; // read RAM data command
+  constexpr uint8_t readVersionCmd = 0x08; // read ID/version command
+  constexpr uint8_t setChipType    = 0x0A; // set chip type command
+  constexpr uint8_t ResetLineCmd   = 0x0F; // set reset line command
+
 
   // Clears all output bits on the shift register, go to emulation mode
   void clearDataBus() {
   }
 
   void startBlockTransfer(uint32_t startAddr) {
-    uint32_t txlong = startAddr | setAddrCmdAutoInc; // set address command (0x3) with autoinc after next read or write
-    digitalWrite(LATCH_PIN, LOW);
-    SPI.write32(txlong); // set address to read or write
-    digitalWrite(LATCH_PIN, HIGH);
+    SS_LOW;
+    SPI.write(ResetLineCmd); // set address to read or write
+    SPI.write(1); // set reset line bit to 1 (active)
+    SS_HIGH;
     delayMicroseconds(1); // wait for FPGA to process the command
-    digitalWrite(LATCH_PIN, LOW);
-    SPI.write32(SetResetCmd); // set address to read or write
-    digitalWrite(LATCH_PIN, HIGH);
+    SS_LOW;
+    SPI.write(setAddrCmd); // set address command
+    SPI.write32(startAddr); // set address to read or write
+    SS_HIGH;
+
   }
 
   void stopBlockTransfer() {
-    digitalWrite(LATCH_PIN, LOW);
-    SPI.write32(setAddrCmd); // set address
-    digitalWrite(LATCH_PIN, HIGH);
-    delayMicroseconds(1); // wait for FPGA to process the command
-    digitalWrite(LATCH_PIN, LOW);
-    SPI.write32(ClearResetCmd); // set address to read or write
-    digitalWrite(LATCH_PIN, HIGH);
-  }
-
-  uint32_t spi_xfer32(uint32_t data) {
-    uint32_t rxlong;
-    digitalWrite(LATCH_PIN, LOW);
-    rxlong  = SPI.transfer16(data >> 16) << 16;
-    rxlong |= SPI.transfer16(data & 0xFFFF);
-    digitalWrite(LATCH_PIN, HIGH);
-    return rxlong;
+    SS_LOW;
+    SPI.write(ResetLineCmd);
+    SPI.write(0); // set reset line bit to 0 (inactive)
+    SS_HIGH;
   }
 
   // Sends one byte to device output
-  void outputByte(uint32_t value) {
+  void outputByte(uint8_t value) {
     // Shifts one byte to SPI
-    digitalWrite(LATCH_PIN, LOW);
-    SPI.write32(value | writeDataCmd); // write command
-    digitalWrite(LATCH_PIN, HIGH);
+    SS_LOW;
+    SPI.write16(writeDataIncCmd << 8 | value); // write data command with autoinc after write
+    // SPI.write(value); // write data command
+    SS_HIGH;
   }
 
   // receives one byte from device
   uint8_t inputByte() {
-    digitalWrite(LATCH_PIN, LOW);
-    SPI.write32(readDataCmd); // read command
-    digitalWrite(LATCH_PIN, HIGH);
-    uint32_t rxlong = spi_xfer32(readCycle) & 0xFF; // read back data from internal register
-    return static_cast<uint8_t>(rxlong);
+    SS_LOW;
+    SPI.write(readDataIncCmd); // read command with autoinc after read
+    uint8_t rxbyte = SPI.transfer(0); // read back data from internal register
+    SS_HIGH;
+    return rxbyte;
   }
 
-  void getFPGAversion() {
-    digitalWrite(LATCH_PIN, LOW);
-    SPI.write32(readVersionCmd); // read ID/version command
-    digitalWrite(LATCH_PIN, HIGH);
-    fpgaVersion = spi_xfer32(readCycle); // read back data from internal register
-    Serial.printf("FPGA version: %08X\n", fpgaVersion);
+  // sends one 32 bit word to device
+  void outputWord32(uint8_t command, uint32_t data) {
+    SS_LOW;
+    SPI.write(command); // send command
+    SPI.write32(data);  // send data
+    SS_HIGH;
+  }
+
+  // receives one 32 bit word from device
+  uint32_t inputWord32(uint8_t command) {
+    SS_LOW;
+    SPI.write(command); // read command with autoinc after read
+    uint32_t rxlong;
+    rxlong  = SPI.transfer16(0) << 16;
+    rxlong |= SPI.transfer16(0);
+    SS_HIGH;
+    return rxlong;
+  }
+
+  uint32_t getFPGAversion() {
+    return inputWord32(readVersionCmd);
   }
 
   // Reads bytes from the slave device and stores them into a LittleFS file.
@@ -178,24 +190,27 @@ void setUpSendLed(bool on) {
     Serial.println(F("Testing SPI transfer to FPGA BRAM..."));
     dy1message(F("tst"));
     drawStringBox("Test", "Pattern", 0);
-    uint8_t vals_written[16];
+    uint8_t vals_written[16], vals_read[16];
     uint32_t start_addr = 0x0400;
     startBlockTransfer(start_addr);
-    for (uint32_t i = 0; i < 16; ++i) {
+    for (int i = 0; i < 16; ++i) {
       vals_written[i] = static_cast<uint8_t>(0xA5 - i*9);
       outputByte(vals_written[i]);
     }
     startBlockTransfer(start_addr);
-    for (uint32_t i = 0; i < 16; ++i) {
+    for (int i = 0; i < 16; ++i) {
+      vals_read[i] = inputByte();
+    }
+    stopBlockTransfer();
+    for (int i = 0; i < 16; ++i) {
       // read back data from internal register
       Serial.print(F("Addr 0x"));
       Serial.print(start_addr + i, HEX);
       Serial.print(F(", Written 0x"));
       Serial.print(vals_written[i], HEX);
       Serial.print(F(", Received 0x"));
-      Serial.println(inputByte(), HEX);
+      Serial.println(vals_read[i], HEX);
     }
-    stopBlockTransfer();
   }
 #endif
 

@@ -38,7 +38,8 @@ void printIDcode() {
     jtagIDcode = jtagReadIDcode();
     Serial.printf("ID code: %08X\n", jtagIDcode);
     Serial.print(F("(X4001093 for Xilinx XC6SLX9)\n"));
-    getFPGAversion();
+    fpgaVersion = getFPGAversion();
+    Serial.printf("FPGA version: %08X\n", fpgaVersion);
     Serial.print(F("Emulation: "));
     Serial.println(kChipTypeNames[currentChipTypeIndex]);
     printDivLine();

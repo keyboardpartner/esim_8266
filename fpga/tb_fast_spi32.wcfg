@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wave_config>
+   <wave_state>
+   </wave_state>
+   <db_ref_list>
+      <db_ref path="E:/MojoFPGA_Picoblaze/fpga/tb_fast_spi32_isim_beh.wdb" id="1" type="auto">
+         <top_modules>
+            <top_module name="numeric_std" />
+            <top_module name="std_logic_1164" />
+            <top_module name="std_logic_arith" />
+            <top_module name="std_logic_unsigned" />
+            <top_module name="tb_fast_spi32" />
+         </top_modules>
+      </db_ref>
+   </db_ref_list>
+   <WVObjectSize size="16" />
+   <wvobject fp_name="/tb_fast_spi32/sysclk" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">sysclk</obj_property>
+      <obj_property name="ObjectShortName">sysclk</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/spi_tx" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">spi_tx[31:0]</obj_property>
+      <obj_property name="ObjectShortName">spi_tx[31:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/sck" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">sck</obj_property>
+      <obj_property name="ObjectShortName">sck</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/ss" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">ss</obj_property>
+      <obj_property name="ObjectShortName">ss</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/mosi" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">mosi</obj_property>
+      <obj_property name="ObjectShortName">mosi</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/miso" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">miso</obj_property>
+      <obj_property name="ObjectShortName">miso</obj_property>
+      <obj_property name="UseCustomSignalColor">true</obj_property>
+      <obj_property name="CustomSignalColor">#00ffff</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/uut/start_tick" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">start_tick</obj_property>
+      <obj_property name="ObjectShortName">start_tick</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/uut/cmd_tick" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">cmd_tick</obj_property>
+      <obj_property name="ObjectShortName">cmd_tick</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/byte_tick" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">byte_tick</obj_property>
+      <obj_property name="ObjectShortName">byte_tick</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/byte_rx" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">byte_rx[7:0]</obj_property>
+      <obj_property name="ObjectShortName">byte_rx[7:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/end_tick" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">end_tick</obj_property>
+      <obj_property name="ObjectShortName">end_tick</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/spi_rx" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">spi_rx[31:0]</obj_property>
+      <obj_property name="ObjectShortName">spi_rx[31:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="divider15" type="divider">
+      <obj_property name="label">New Divider</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <obj_property name="BkColor">128 128 255</obj_property>
+      <obj_property name="TextColor">230 230 230</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/uut/cmd_bit_counter" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">cmd_bit_counter[3:0]</obj_property>
+      <obj_property name="ObjectShortName">cmd_bit_counter[3:0]</obj_property>
+      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/uut/data_bit_counter" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">data_bit_counter[4:0]</obj_property>
+      <obj_property name="ObjectShortName">data_bit_counter[4:0]</obj_property>
+      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_fast_spi32/uut/shift_in" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">shift_in[31:0]</obj_property>
+      <obj_property name="ObjectShortName">shift_in[31:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+</wave_config>

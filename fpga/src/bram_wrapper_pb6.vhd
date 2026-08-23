@@ -17,7 +17,7 @@
 -- Module Name: bram_wrapper - Behavioral
 --
 -- Description:
--- Emulates a SRAM or EPROM
+-- Loadable Picoblaze instruction ROM
 ----------------------------------------------------------------------------------
 
 library IEEE;
@@ -28,11 +28,13 @@ use IEEE.NUMERIC_STD.ALL;
 entity bram_wrapper_pb6 is
   Port ( 
     SYSCLK:   in STD_LOGIC;
-    END_TICK: in STD_LOGIC; 
-    VERSION:  in STD_LOGIC_VECTOR(31 DOWNTO 0);
+    CMD_TICK: in STD_LOGIC;
+    CMD_BYTE:  in STD_LOGIC_VECTOR(7 DOWNTO 0);
+    END_TICK: in STD_LOGIC;
     SPI_RX:   in STD_LOGIC_VECTOR(31 DOWNTO 0);
     SPI_TX:   out STD_LOGIC_VECTOR(31 DOWNTO 0);
     CFG_PORT: out STD_LOGIC_VECTOR(3 DOWNTO 0);
+    VERSION:  in STD_LOGIC_VECTOR(31 DOWNTO 0);
     OUTPORT_0: out STD_LOGIC_VECTOR(7 DOWNTO 0);
     OUTPORT_1: out STD_LOGIC_VECTOR(7 DOWNTO 0);
     OUTPORT_2: out STD_LOGIC_VECTOR(7 DOWNTO 0);
@@ -62,8 +64,7 @@ COMPONENT pb_ram
 END COMPONENT;
 
 signal addr_host: std_logic_vector(15 downto 0);
-signal cmd_spi: std_logic_vector(7 downto 0):= (others => '0');
-signal data_spi_wr, data_spi_rd: std_logic_vector(7 downto 0);
+signal data_spi_wr, data_spi_rd, command: std_logic_vector(7 downto 0);
 signal data_host_rd: std_logic_vector(31 downto 0);
 signal wea_spi: std_logic_vector(0 downto 0) := "0";
 
@@ -94,65 +95,71 @@ pb_instructions: pb_ram
 
 PB_DATA <= data_host_rd(17 downto 0);
 
-cmd_spi <= SPI_RX(31 downto 24);
-
 cmdproc: process(SYSCLK)
 begin
   if rising_edge(SYSCLK) then
-    -- sample command and data on END_TICK signal
-    -- "00100000 aaaaaaaa aaaaaaaa aaaaaaaa" = set address command
-    -- "00110000 aaaaaaaa aaaaaaaa aaaaaaaa" = set address command with autoinc after next read or write
-    -- "10000000 xxxxxxxx xxxxxxxx dddddddd" = write data command
-    -- "01000000 xxxxxxxx xxxxxxxx xxxxxxxx" = read data command
-    -- "11000000 xxxxxxxx xxxxxxxx xxxxxxxx" = read ID/version command
-    -- "10100000 xxxxxxxx xxxxxxxx xxxxxxxx" = Set Type Select (CFG output nibble)
-    -- "00000000 xxxxxxxx xxxxxxxx xxxxxxxx" = SPI read cycle, return data from last read command
-
+    -- x"00 AA AA AA" = set address command
+    -- x"02 xx xx DD" = write RAM data command
+    -- x"03 xx xx DD" = write RAM data command with autoinc after write
+    -- x"04 xx xx xx" = read RAM data command
+    -- x"05 xx xx xx" = read RAM data command with autoinc after read
+    -- x"08 xx xx xx" = read ID/version command
+    -- x"0A xx xx xx" = Set Type Select (CFG output nibble)
+    -- x"0F xx xx xB" = Set Reset line to Bit 0, B = 0 oder 1
+    -- x"4P xx xx DD" = Write Port P = 0..3
+    -- x"4P xx xx DD" = Write Port P = 0..3
+ 
     end_tick_d1 <= END_TICK;
     end_tick_d2 <= end_tick_d1;
     write_tick <= '0';
 
-    if END_TICK = '1' then      
-      case cmd_spi is
-        when x"00" => -- SPI read cycle, return data from last read command
-          increment <= autoinc_enable;
-        when x"20" => -- set address command
+    if CMD_TICK = '1' then
+      -- CMD ist vollständig, Reads können jetzt vorbereitet werden, 
+      -- Writes werden erst bei END_TICK verarbeitet
+      command <= CMD_BYTE; -- latch command byte
+      case CMD_BYTE is
+        when x"04" => -- read 8 Bit data command
+          SPI_TX(31 downto 24) <= data_spi_rd; -- first 8 bits to be read in MSB!
+        when x"05" => -- read 8 Bit data command with autoinc after read
+          SPI_TX(31 downto 24) <= data_spi_rd; -- first 8 bits to be read in MSB!
+        when x"08" => -- read ID/version command
+          SPI_TX <= VERSION;
+        when others =>
+          -- do nothing
+      end case;
+    end if;
+
+    if END_TICK = '1' then     
+      -- Daten sind vollständig empfangen, CMD für Writes kann jetzt verarbeitet werden 
+      increment <= '0';
+      case command is
+        when x"00" => -- set address command
           addr_counter <= SPI_RX(23 downto 0);
-          autoinc_enable <= '0';
-          increment <= '0';
-        when x"30" => -- set address command with autoinc after read or write
-          addr_counter <= SPI_RX(23 downto 0);
-          autoinc_enable <= '1';
-          increment <= '0';
-        when x"40" => -- read data command
-          SPI_TX <= x"000000" & data_spi_rd;
-          increment <= '0'; -- do not increment address counter on read command, only on SPI read cycle
-			 
-        when x"60" => -- write port 0 command
-          OUTPORT_0 <= SPI_RX(7 downto 0);
-        when x"61" => -- write port 1 command
-          OUTPORT_1 <= SPI_RX(7 downto 0);
-        when x"62" => -- write port 2 command
-          OUTPORT_2 <= SPI_RX(7 downto 0);
-        when x"63" => -- write port 3 command
-          OUTPORT_3 <= SPI_RX(7 downto 0);
-			 
-        when x"80" => -- write data command
+
+        when x"02" => -- write data command
           data_spi_wr <= SPI_RX(7 downto 0);
           write_tick <= '1';
-          increment <= autoinc_enable;
-       when x"A0" => -- Set Type Select
+        when x"03" => -- write RAM data command with autoinc after write
+          data_spi_wr <= SPI_RX(7 downto 0);
+          write_tick <= '1';
+          increment <= '1';
+
+        when x"05" => -- read RAM data command with autoinc after read
+          increment <= '1';
+			 
+        when x"40" => -- write port 0 command
+          OUTPORT_0 <= SPI_RX(7 downto 0);
+        when x"41" => -- write port 1 command
+          OUTPORT_1 <= SPI_RX(7 downto 0);
+        when x"42" => -- write port 2 command
+          OUTPORT_2 <= SPI_RX(7 downto 0);
+        when x"43" => -- write port 3 command
+          OUTPORT_3 <= SPI_RX(7 downto 0);
+			 
+       when x"0A" => -- Set Type Select
           CFG_PORT <= SPI_RX(3 downto 0);
-          autoinc_enable <= '0';
-          increment <= '0'; -- do not increment address counter on read command, only on SPI read cycle
-        when x"C0" => -- read ID/version command
-          SPI_TX <= VERSION;
-          autoinc_enable <= '0';
-          increment <= '0'; -- do not increment address counter on read command, only on SPI read cycle
-        when x"E0" => -- Clear Reset Command
-			 RESET <= '0';
-        when x"F0" => -- Set Reset Command
-			 RESET <= '1';
+        when x"0F" => -- Set/Clear Reset Command
+			    RESET <= SPI_RX(0);
         when others =>
           -- do nothing
       end case;
