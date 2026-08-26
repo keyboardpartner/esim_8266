@@ -62,7 +62,7 @@
 // uncomment to use MOJO board with Spartan XC6SLX9 
 #define JTAG_SPARTAN6
 
-constexpr const char *versionString = "0.91";
+constexpr const char *versionString = "0.92";
 
 #ifdef DEBUG
   #define DPRINT(...)    Serial.print(__VA_ARGS__)
@@ -135,8 +135,7 @@ void printCenteredSerial(const String &text, char padChar = '-') {
 #ifdef JTAG_SPARTAN6
   #define LATCH_PIN 15 // FPGA SPI /SS
   #include "jtag_send.h"
-  constexpr const char *kApSsid = "SPARTAN 6 Uploader";
-  uint32_t jtagIDcode = 0;
+  constexpr const char *kApSsid = "FPGA Uploader";
 #endif
 
 
@@ -202,7 +201,6 @@ String wifiIpAddress = "192.168.4.1";
 
 String lastFilename;
 size_t lastFileBytes = 0;
-size_t totalBytesSent = 0;
 bool uploadInProgress = false;
 bool fsMounted = false;
 
@@ -211,9 +209,6 @@ size_t stagedFileBytes = 0;
 size_t streamOffset = 0;
 String currentFilePath;
 String pendingSerialFilename;
-
-uint32_t webUploadStartAddr = 0;
-bool currentUploadStartArgInvalid = false;
 
 uint32_t lastUploadStartAddr = 0;
 uint32_t lastStreamedStartAddr = 0;
@@ -225,9 +220,12 @@ bool currentUploadFsError = false;
 String pendingMessage;
 bool likelyFreshFsImage = false;
 String startupFpgaPath = "/fpga_main.bit";
+bool autoplayEnabled = false;
+uint8_t port0value = 0;
+uint8_t port1value = 0;
 
-uint32_t fpgaVersion = 0;
 
+unsigned long msgTimeout = -1; // no timeout by default
 
 
 void drawMsgBox(const String &title, const String &message, DialogBoxType msgType, uint32_t timeoutMs = 1000) {
@@ -244,10 +242,17 @@ void drawMsgBox(const String &title, const String &message, DialogBoxType msgTyp
       tft.drawString(title, 100, TFT_V_OFFS + 14);
       tft.drawString(message, 100, TFT_V_OFFS + 42);
     }
-    if (msgType == DB_ERROR)
+    switch (msgType) {
+    case DB_REQUEST:
+      icon_color = TFT_GREEN;
+      break;
+    case DB_ERROR:
       icon_color = TFT_RED;
-    else
+      break;
+    default:
       icon_color = TFT_BLUE;
+      break;
+    }
     tft.setTextDatum(MC_DATUM); // middle center text datum
     tft.fillRoundRect(16, DISPLAY_CENTER_Y - 18, 26, 36, 4, icon_color); // center_x - 120 +
     tft.setTextColor(TFT_WHITE, icon_color);
@@ -266,7 +271,11 @@ void drawMsgBox(const String &title, const String &message, DialogBoxType msgTyp
       break;
     }
   #endif
-  delay(timeoutMs);
+  msgTimeout = millis() + timeoutMs;
+  if (msgType == DB_ERROR) {
+    delay(2000); // wait 2 seconds for error messages
+    msgTimeout = -1; // reset timeout to avoid repeated drawing
+  }
 } 
 
 void drawStringBox(const String &message1, const String &message2 = "", uint32_t timeoutMs = 1000) {
@@ -292,7 +301,7 @@ void drawStringBox(const String &message1, const String &message2 = "", uint32_t
       tft.drawString(message1, DISPLAY_CENTER_X, DISPLAY_CENTER_Y);
     }
   #endif
-  delay(timeoutMs);
+  msgTimeout = millis() + timeoutMs;
 }
 
 void drawStatusBox() {
@@ -328,6 +337,7 @@ void drawStatusBox() {
     tft.print(kChipTypeNames[currentChipTypeIndex]);
     tft.setCursor(DISPLAY_CENTER_X, y);
     tft.print("0x"+String(lastStreamedStartAddr, HEX));
+    msgTimeout = -1; // reset timeout to avoid repeated drawing
   #endif
 }
 
@@ -338,10 +348,10 @@ void readyMessage() {
     set_letter(1, 'd');
     set_letter(2, 'y');
     spi_send_displ_arr();
+    msgTimeout = millis() + 1000; // reset timeout to avoid repeated drawing
   #endif
   #ifdef USE_TFT_DISPLAY
     drawMsgBox(F("Ready"), F(""), DB_INFO, 1000);
-    drawStatusBox();
   #endif
 }
 

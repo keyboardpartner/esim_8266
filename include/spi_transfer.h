@@ -45,14 +45,15 @@ void setUpSendLed(bool on) {
   // x"0F xx xx xB" = Set Reset line to Bit 0, B = 0 oder 1
   // x"4P xx xx DD" = Write Port P = 0..3
 
-  constexpr uint8_t setAddrCmd     = 0x00; // set address command
-  constexpr uint8_t writeDataCmd       = 0x02; // write RAM data command
-  constexpr uint8_t writeDataIncCmd    = 0x03; // write RAM data command with autoinc after next write
-  constexpr uint8_t readDataCmd    = 0x04; // read RAM data command
-  constexpr uint8_t readDataIncCmd    = 0x05; // read RAM data command
-  constexpr uint8_t readVersionCmd = 0x08; // read ID/version command
-  constexpr uint8_t setChipType    = 0x0A; // set chip type command
-  constexpr uint8_t ResetLineCmd   = 0x0F; // set reset line command
+  constexpr uint8_t setAddrCmd      = 0x00; // set address command
+  constexpr uint8_t writeDataCmd    = 0x02; // write RAM data command
+  constexpr uint16_t writeDataIncCmd = 0x03; // write RAM data command with autoinc after next write
+  constexpr uint8_t readDataCmd     = 0x04; // read RAM data command
+  constexpr uint8_t readDataIncCmd  = 0x05; // read RAM data command
+  constexpr uint8_t readVersionCmd  = 0x08; // read ID/version command
+  constexpr uint8_t resetLineCmd    = 0x0F; // set reset line command
+  constexpr uint16_t setChipTypeCmd = 0x0A; // set chip type command
+  constexpr uint16_t setPortCmd     = 0x40; // set port command (0x40..0x4F)
 
 
   // Clears all output bits on the shift register, go to emulation mode
@@ -61,7 +62,7 @@ void setUpSendLed(bool on) {
 
   void startBlockTransfer(uint32_t startAddr) {
     SS_LOW;
-    SPI.write(ResetLineCmd); // set address to read or write
+    SPI.write(resetLineCmd); // set address to read or write
     SPI.write(1); // set reset line bit to 1 (active)
     SS_HIGH;
     delayMicroseconds(1); // wait for FPGA to process the command
@@ -74,7 +75,7 @@ void setUpSendLed(bool on) {
 
   void stopBlockTransfer() {
     SS_LOW;
-    SPI.write(ResetLineCmd);
+    SPI.write(resetLineCmd);
     SPI.write(0); // set reset line bit to 0 (inactive)
     SS_HIGH;
   }
@@ -181,7 +182,6 @@ void setUpSendLed(bool on) {
     Serial.print(filename);
     Serial.print(F(", bytes="));
     Serial.println(len);
-    readyMessage();
     return true;
   }
 
@@ -189,7 +189,7 @@ void setUpSendLed(bool on) {
     // Write test pattern to internal registers and read back to verify correctness.
     Serial.println(F("Testing SPI transfer to FPGA BRAM..."));
     dy1message(F("tst"));
-    drawStringBox("Test", "Pattern", 0);
+    drawStringBox("Test", "Pattern");
     uint8_t vals_written[16], vals_read[16];
     uint32_t start_addr = 0x0400;
     startBlockTransfer(start_addr);
@@ -356,11 +356,22 @@ void setUpSendLed(bool on) {
 
 // Sends chip type ID (0..15) to device output for GODIL/JTAG modes.
 // Other modes ignore this setting.
-void outputChipType(uint32_t value) {
+void outputChipType(uint8_t value) {
   #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
-    digitalWrite(LATCH_PIN, LOW);
-    SPI.write32((value & 0x0F) | setChipType); // set chip type command
-    digitalWrite(LATCH_PIN, HIGH);
+    SS_LOW;
+    SPI.write16(setChipTypeCmd << 8 | value); // write data command with autoinc after write
+    SS_HIGH;
+  #else
+    (void)value;
+  #endif
+}
+
+void outputPort(int port, uint8_t value) {
+  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+    SS_LOW;
+    uint16_t set_port_cmd = setPortCmd | (port & 0x0F); // set port command (0x40..0x4F)
+    SPI.write16(set_port_cmd << 8 | value); // write data command with autoinc after write
+    SS_HIGH;
   #else
     (void)value;
   #endif
@@ -383,5 +394,4 @@ void eraseEPROM() {
   drawStringBox("Erase", "RAM/EPROM", 0);
   eraseEPROMsilent();
   Serial.println(F("Done."));
-  readyMessage();
 }

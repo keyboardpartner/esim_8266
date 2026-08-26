@@ -18,23 +18,18 @@
 
 // Opens the staged file and sends it in one blocking pass.
 bool startPlaybackFromStaging(uint32_t startAddr, const String &filePath) {
-  Serial.print(F("\rReplay...  "));
+  Serial.println();
   if (!fsMounted || stagedFileBytes == 0 || filePath.length() == 0 || !LittleFS.exists(filePath)) {
     Serial.println(F("No file to send."));
     return false;
   }
-
   if (isNonStreamableFilePath(filePath)) {
-    Serial.println(F("Skipping playback: .css/.html files are not streamable."));
+    Serial.println(F("Skipping playback: System files are not streamable."));
     return false;
   }
+  uint32_t start_time = millis();
   #ifdef JTAG_SPARTAN6
-    if (currentChipTypeIndex > 10) {
-      Serial.println(F("KCPSM 3/6 type, Start address set to 0."));
-      startAddr = 0;
-    }
-    if (isBitstreamFilePath(filePath)) {
-      webUploadStartAddr = 0;
+     if (isBitstreamFilePath(filePath)) {
       lastUploadStartAddr = 0;
       lastStreamedStartAddr = 0;
       dy1message(F("cfg"));
@@ -42,81 +37,64 @@ bool startPlaybackFromStaging(uint32_t startAddr, const String &filePath) {
       jtagConfigure(filePath);
       printIDcode();
       currentChipTypeIndex = kInvalidChipTypeIndex; // reset to invalid index, meaning no chip type selected
-      eraseEPROMsilent(); // erase the EEPROM after configuring the FPGA
+      // eraseEPROMsilent(); // erase the EEPROM after configuring the FPGA
       outputChipType(kInvalidChipTypeIndex); // output invalid chip type
-      readyMessage();
       return true;
+    } else {
+      if (currentChipTypeIndex > 10) {
+        Serial.println(F("PicoBlaze type, start address set to 0."));
+        startAddr = 0;
+      }
     }
   #endif
   lastStreamedStartAddr = startAddr;
+
+  uint32_t savedChipType = 0;
+  if (loadChipTypeForFile(filePath, savedChipType)) {
+    currentChipTypeIndex = savedChipType;
+  }
 
   File playbackFile = LittleFS.open(filePath, "r");
   if (!playbackFile) {
     Serial.println(F("Failed to open playback file."));
     dy1message(F("Fnf"));
-    drawMsgBox(F("Error"), F("File not found"), DB_ERROR, 2000);
+    drawMsgBox(F("Error"), F("File not found"), DB_ERROR);
     return false;
   }
   size_t playbackBytesSent = 0;
 
-  Serial.print(F("File: "));
+  Serial.print(F("Replay File: "));
   Serial.print(filePath);
   Serial.print(F(", startAddr=0x"));
-  Serial.print(startAddr, HEX);
-
-  #if defined(DEBUG)
-    const uint32_t playbackStartMs = millis();
-    DPRINT(F(", bytes="));
-    DPRINTLN(stagedFileBytes);
-  #endif
+  Serial.println(startAddr, HEX);
 
   streamOffset = 0;
   setUpSendLed(true);
   dy1message(F("rpl"));
-  drawStringBox(filePath, "Sent to 0x" + String(startAddr, HEX), 0);
+  drawStringBox(filePath, "Sent to 0x" + String(startAddr, HEX));
 
   outputChipType(currentChipTypeIndex);
   
   startBlockTransfer(startAddr);
+  uint8_t playbackBuffer[256];
   while (playbackFile.available()) {
-    const int nextByte = playbackFile.read();
-    if (nextByte < 0) {
+    const size_t bytesRead = playbackFile.read(playbackBuffer, sizeof(playbackBuffer));
+    if (bytesRead == 0) {
       break;
     }
 
-    outputByte(static_cast<uint8_t>(nextByte));
-    ++streamOffset;
-    ++playbackBytesSent;
-    ++totalBytesSent;
-
-    if ((streamOffset & 0x1F) == 0) {
-      delay(0); yield();
+    for (size_t i = 0; i < bytesRead; ++i) {
+      outputByte(playbackBuffer[i]);
+      ++streamOffset;
+      ++playbackBytesSent;
     }
+    delay(0); yield();
   }
   stopBlockTransfer();
 
   playbackFile.close();
-  Serial.println(F(" ...Done."));
-#if defined(DEBUG)
-  const uint32_t elapsedMs = millis() - playbackStartMs;
-  DPRINT(F("Playback done: file="));
-  DPRINT(filePath);
-  DPRINT(F(", bytes="));
-  DPRINT(playbackBytesSent);
-  DPRINT(F(", elapsed_ms="));
-  DPRINT(elapsedMs);
-  DPRINT(F(", rate_Bps="));
-  if (elapsedMs > 0) {
-    DPRINTLN(static_cast<unsigned long>((static_cast<uint32_t>(playbackBytesSent) * 1000UL) / elapsedMs));
-  } else {
-    DPRINTLN(F("n/a"));
-  }
-#endif
-  if (playbackBytesSent < 16384) {
-      delay(1000);
-  }
-  readyMessage();
-  setUpSendLed(false);
+  Serial.print(F("Done in"));
+  Serial.printf(" %lu ms, bytes sent: %u\n", (unsigned long)(millis() - start_time), playbackBytesSent);
   clearDataBus();
   return true;
 }

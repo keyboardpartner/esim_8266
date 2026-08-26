@@ -31,6 +31,19 @@
           Configuration)</label>
         <input id="startup_fpga_path" name="startup_fpga_path" type="text"
           required>
+
+        <div class="port-bits-wrap">
+          <table class="port-bits">
+            <tbody>
+              <tr class="port-bit-row" data-port="0">
+                <th scope="row">Port 0</th>
+              </tr>
+              <tr class="port-bit-row" data-port="1">
+                <th scope="row">Port 1</th>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </form>
 
       <div class="upload-actions-row" style="margin-top:8px; padding-top:12px">
@@ -54,6 +67,22 @@
       const err = q.get('err');
       const saved = q.get('saved');
 
+      document.querySelectorAll('.port-bit-row').forEach((row) => {
+        const port = row.dataset.port;
+        for (let bit = 7; bit >= 0; bit -= 1) {
+          const cell = document.createElement('td');
+          const label = document.createElement('label');
+          label.className = 'bit-checkbox';
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.name = `port${port}_bit_${bit}`;
+          checkbox.dataset.bit = bit;
+          label.append(checkbox, document.createTextNode(`Bit ${bit}`));
+          cell.append(label);
+          row.append(cell);
+        }
+      });
+
       if (err) {
         msgEl.textContent = err;
         msgEl.className = 'msg wait';
@@ -72,6 +101,12 @@
           document.getElementById('startup_fpga_path').value = s.startup_fpga_path || '/fpga_main.bit';
           document.getElementById('sta_ssid').value = s.sta_ssid || '';
           document.getElementById('sta_password').value = s.sta_password || '';
+          document.querySelectorAll('.port-bit-row').forEach((row) => {
+            const value = Number(s[`port${row.dataset.port}value`]) || 0;
+            row.querySelectorAll('input[data-bit]').forEach((checkbox) => {
+              checkbox.checked = (value & (1 << Number(checkbox.dataset.bit))) !== 0;
+            });
+          });
         })
         .catch(() => {
           if (!msgEl.textContent) {

@@ -51,6 +51,47 @@ input[type=text] {
   box-sizing: border-box;
 }
 
+.port-bits-wrap {
+  margin-top: 20px;
+  overflow-x: auto;
+}
+
+.port-bits {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.port-bits th {
+  width: 72px;
+  padding: 8px 4px;
+  text-align: left;
+  font-weight: 700;
+}
+
+.port-bits td {
+  padding: 8px 4px;
+  text-align: center;
+}
+
+.bit-checkbox {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bit-checkbox input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #22c55e;
+}
+
 button {
   margin-top: 16px;
   background: #22c55e;
@@ -81,6 +122,66 @@ button[disabled] {
 
 .upload-actions-row button {
   margin-top: 0;
+}
+
+.autoplay-form {
+  margin: 0;
+}
+
+.switch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+
+.switch input {
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: #475569;
+  transition: background 0.2s;
+}
+
+.slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 0.2s;
+}
+
+.switch input:checked + .slider {
+  background: #22c55e;
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(20px);
+}
+
+.switch input:focus-visible + .slider {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
 }
 
 .actions {

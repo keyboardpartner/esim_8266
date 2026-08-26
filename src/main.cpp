@@ -116,6 +116,12 @@ void setup() {
 
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
+  delay(200);
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(200);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(200);
+  
   #ifndef JTAG_SPARTAN6
     pinMode(LED_SENDDATA, OUTPUT);
     digitalWrite(LED_SENDDATA, LOW);
@@ -189,22 +195,8 @@ void setup() {
     tft.setRotation(3);  //The parameters are: 0, 1, 2, 3, representing the rotation of the screen 0°, 90°, 180°, 270°
     tft.setTextSize(1);
     tft.fillRect(0, 0, 160, 160, TFT_BLACK);
-    drawStringBox(F("ESP Uploader"), "Version " + String(versionString), 0);
-  #endif
-
-  clearDataBus();
-  // Blink LED as a short delay to indicate boot and allow time for the serial monitor to connect.
-  #ifdef USE_WEB_SERVER
-    for (int i = 0; i < 5; ++i) {
-      digitalWrite(LED_BUILTIN, HIGH);
-      delay(100);
-      digitalWrite(LED_BUILTIN, LOW);
-      delay(100);
-    }
-  #else
-    digitalWrite(LED_BUILTIN, HIGH);
+    drawStringBox(F("ESP Uploader"), "Version " + String(versionString));
     delay(500);
-    digitalWrite(LED_BUILTIN, LOW);
   #endif
 
   if (!LittleFS.begin()) {
@@ -214,7 +206,6 @@ void setup() {
     drawMsgBox(F("Error"), F("LittleFS init failed"), DB_ERROR);
   } else {
     fsMounted = true;
-    warnIfLikelyFreshFilesystemImage();
     loadGlobalSettings();
     if (lastFilename.length() > 0) {
       const String restoredPath = normalizeFsPath(lastFilename);
@@ -232,9 +223,39 @@ void setup() {
       }
     }
   }
+
+  #ifdef GODIL_SPI
+    fpgaValid = true;  
+    getFPGAversion();
+  #endif
+
+  #ifdef JTAG_SPARTAN6
+    if (fsMounted) {
+      if (LittleFS.exists(startupFpgaPath) && isBitstreamFilePath(startupFpgaPath)) {
+        drawStringBox(F("FPGA Config"), startupFpgaPath);
+        dy1message(F("cfg"));
+        if (jtagCheckIDcode()) {
+          jtagConfigure(startupFpgaPath);
+          printIDcode();
+        }
+      } else {
+        dy1message(F("Err"));
+        drawMsgBox(F("FPGA File"), F("not found!"), DB_ERROR);
+        Serial.print(F("File "));
+        Serial.print(startupFpgaPath);
+        Serial.println(F(" not found, FPGA not configured!"));
+      }
+    }
+  #endif
+  outputPort(0, port0value); // set all outputs
+  outputPort(1, port1value); // set all outputs
+  if (autoplayEnabled && !isBitstreamFilePath(currentFilePath)) {
+    startPlaybackFromStaging(resolveStartAddressForPath(currentFilePath), currentFilePath);
+  }
+
   #ifdef USE_WEB_SERVER
     dy1message(F("con"));
-    drawMsgBox(F("Wi-Fi"), F("Connect"), DB_INFO, 0);
+    drawMsgBox(F("Wi-Fi"), F("Connect"), DB_INFO);
     serverInit();
     #ifdef USE_DY1_DISPLAY
       // display IP address on the 3-digit 7-segment display for a few seconds.
@@ -266,50 +287,25 @@ void setup() {
     dy1message(F("off"));
     drawMsgBox(F("Wi-Fi"), F("OFF"), DB_INFO);
   #endif
-
-  #ifdef GODIL_SPI
-    getFPGAversion();
-  #endif
-  #ifdef JTAG_SPARTAN6
-    if (fsMounted) {
-      if (LittleFS.exists(startupFpgaPath)) {
-        File startupFpgaFile = LittleFS.open(startupFpgaPath, "r");
-        if (startupFpgaFile) {
-          startupFpgaFile.close();
-          if (isBitstreamFilePath(startupFpgaPath)) {
-            drawStringBox(F("FPGA Config"), startupFpgaPath, 0);
-            dy1message(F("cfg"));
-            jtagConfigure(startupFpgaPath);
-            printIDcode();
-           }
-        }
-      } else {
-        dy1message(F("Err"));
-        drawMsgBox(F("FPGA"), F("Config Error"), DB_ERROR);
-        Serial.print(F("File "));
-        Serial.print(startupFpgaPath);
-        Serial.println(F(" not found, FPGA not configured!"));
-      }
-    }
-  #endif
-
+   
   listLittleFsEntries();
   printFileInfo();
-  printSerialCommandsInfo();
-  eraseEPROMsilent();
-  Serial.println("");
-  if (!isBitstreamFilePath(currentFilePath)) {
-    startPlaybackFromStaging(resolveStartAddressForPath(currentFilePath), currentFilePath);
-  } else {
-    readyMessage();
-  }
-  Serial.println(F("Ready."));
+  // printSerialCommandsInfo();
+  delay(1000);
+  readyMessage();
+  Serial.println(F("\nReady."));
 }
 
+  
 // Main service loop for serial commands, HTTP handling, and playback.
 void loop() {
   processSerialCommands();
   #ifdef USE_WEB_SERVER
     server.handleClient();
   #endif
+  if (millis() > msgTimeout) {
+    setUpSendLed(false);
+    drawStatusBox();
+    msgTimeout = -1; // reset timeout to avoid repeated drawing
+  }
 }

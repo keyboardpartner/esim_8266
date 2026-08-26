@@ -35,11 +35,24 @@ void printIDcode() {
   #ifdef JTAG_SPARTAN6
     Serial.println("");
     printCenteredSerial(F("FPGA Info"));
-    jtagIDcode = jtagReadIDcode();
+    jtagCheckIDcode();
     Serial.printf("ID code: %08X\n", jtagIDcode);
-    Serial.print(F("(X4001093 for Xilinx XC6SLX9)\n"));
+    // Check for Xilinx ID code 0x0093 and print success or error message
+    if (fpgaValid && fpgaConfigured) {
+      Serial.println(F("FPGA configured successfully."));
+    } else {
+      Serial.println(F("FPGA configuration failed."));
+      dy1message(F("Err"));
+      drawMsgBox(F("FPGA"), F("ID Error"), DB_ERROR);
+    }
     fpgaVersion = getFPGAversion();
-    Serial.printf("FPGA version: %08X\n", fpgaVersion);
+    if ((fpgaVersion == 0xFFFFFFFF) || (fpgaVersion == 0x00000000)) {
+      Serial.println(F("FPGA version read failed."));
+      dy1message(F("Err"));
+      drawMsgBox(F("FPGA"), F("Version Err"), DB_ERROR);
+    } else {
+      Serial.printf("FPGA version: %08X\n", fpgaVersion);
+    }
     Serial.print(F("Emulation: "));
     Serial.println(kChipTypeNames[currentChipTypeIndex]);
     printDivLine();
@@ -50,18 +63,17 @@ void printFileInfo() {
   const bool stagedExists = fsMounted && currentFilePath.length() > 0 && LittleFS.exists(currentFilePath);
   Serial.println("");
   printCenteredSerial(F("File Info"));
-  Serial.print(F("fsMounted: "));
-  Serial.println(fsMounted ? F("true") : F("false"));
-  Serial.print(F("stagedExists: "));
-  Serial.println(stagedExists ? F("true") : F("false"));
-  Serial.print(F("stagedPath: "));
-  Serial.println(currentFilePath.length() ? currentFilePath : String(F("none")));
-  Serial.print(F("lastUploadStartAddr: "));
+  Serial.print(F("LittleFS mounted: "));
+  Serial.println(fsMounted ? F("Yes") : F("No"));
+  Serial.print(F("FPGA Config: "));
+  Serial.println(startupFpgaPath.length() ? startupFpgaPath : String(F("none")));
+  Serial.print(F("Stream File: "));
+  Serial.print(currentFilePath.length() ? currentFilePath : String(F("none")));
+  Serial.println(stagedExists ? F(" OK") : F(" not found"));
+  Serial.print(F("Start Addr: "));
   Serial.println(lastUploadStartAddr);
-  Serial.print(F("lastFilename: "));
-  Serial.println(lastFilename.length() ? lastFilename : String(F("none")));
-  Serial.print(F("lastFileBytes: "));
-  Serial.println(lastFileBytes);
+  Serial.print(F("Length: "));
+  Serial.println(stagedFileBytes);
   printDivLine();
 }
 
@@ -457,8 +469,8 @@ void processSerialUploadCommand() {
     startupFpgaPath = normalizeFsPath(currentFilePath);
     lastUploadStartAddr = 0;
   }
-  if (!saveStartAddressForFile(currentFilePath, lastUploadStartAddr)) {
-    Serial.println(F("ERROR: failed to save start address metadata."));
+  if (!saveFileSettingsForFile(currentFilePath, lastUploadStartAddr)) {
+    Serial.println(F("ERROR: failed to save file settings metadata."));
   }
   if (!saveGlobalSettings()) {
     Serial.println(F("ERROR: failed to save global settings."));
@@ -468,7 +480,6 @@ void processSerialUploadCommand() {
     Serial.println(F("ERROR: failed to send staged file."));
     return;
   }
-
   Serial.print(F("Serial upload OK: bytes="));
   Serial.println(stagedFileBytes);
   Serial.println(F("Ready."));
@@ -524,7 +535,6 @@ void processSerialCommands() {
           drawStringBox("FPGA Cfg", startupFpgaPath, 0);
           jtagConfigure(startupFpgaPath);
           printIDcode();
-          readyMessage();
           break;
       #endif
       case 'e':
@@ -614,7 +624,6 @@ void processSerialCommands() {
       case 'x':
       case 'X':
         Serial.println();
-        readyMessage();
         Serial.println(F("Ready."));
         break;
       case 't':
@@ -622,7 +631,6 @@ void processSerialCommands() {
         Serial.write('\r');
         testSPItransfer();
         dy1test();
-        readyMessage();
         Serial.println(F("Ready."));
        break;
       case 'n':
@@ -721,6 +729,5 @@ void processSerialCommands() {
         printSerialCommandsInfo();
         break;
     }
-    drawStatusBox();
   }
 }

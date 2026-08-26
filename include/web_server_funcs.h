@@ -1,8 +1,9 @@
 #pragma once
 
 #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
-void outputChipType(uint32_t value);
+void outputChipType(uint8_t value);
 #endif
+
 // ################################################################################
 //
 //      #####  ####### ######  #     # ####### ######  
@@ -186,36 +187,6 @@ const __FlashStringHelper *primaryActionLabelForPath(const String &path) {
   return F("Stream");
 }
 
-void warnIfLikelyFreshFilesystemImage() {
-  if (!fsMounted) {
-    likelyFreshFsImage = false;
-    return;
-  }
-
-  Dir dir = LittleFS.openDir("/");
-  size_t visibleFileCount = 0;
-  size_t nonPackagedCount = 0;
-
-  while (dir.next()) {
-    const String path = normalizeFsPath(dir.fileName());
-
-    if (path == kGlobalSettingsPath || path.endsWith(F(".ini"))) {
-      continue;
-    }
-
-    ++visibleFileCount;
-    if (path != F("/help.html") && path != F("/style.css")) {
-      ++nonPackagedCount;
-    }
-  }
-
-  likelyFreshFsImage = (visibleFileCount > 0 && nonPackagedCount == 0);
-
-  if (likelyFreshFsImage) {
-    Serial.println(F("WARN: LittleFS contains only packaged static files. If you ran uploadfs recently, user-uploaded files were replaced by the new image."));
-  }
-}
-
 String makePerFileIniPath(const String &filePath) {
   const String cleanPath = normalizeFsPath(filePath);
   String name = baseNameFromPath(cleanPath);
@@ -234,7 +205,7 @@ String makePerFileIniPath(const String &filePath) {
   return String('/') + iniName;
 }
 
-bool saveStartAddressForFile(const String &filePath, uint32_t startAddr) {
+bool saveFileSettingsForFile(const String &filePath, uint32_t startAddr) {
   if (!fsMounted) {
     return false;
   }
@@ -250,6 +221,9 @@ bool saveStartAddressForFile(const String &filePath, uint32_t startAddr) {
   }
 
   iniFile.printf("start=%lu\n", static_cast<unsigned long>(startAddr));
+  if (!isBitstreamFilePath(filePath) && !isNonStreamableFilePath(filePath)) {
+    iniFile.printf("chip_type=%lu\n", static_cast<unsigned long>(currentChipTypeIndex));
+  }
   iniFile.close();
   return true;
 }
@@ -298,6 +272,50 @@ bool loadStartAddressForFile(const String &filePath, uint32_t &startAddrOut) {
   return found;
 }
 
+bool loadChipTypeForFile(const String &filePath, uint32_t &chipTypeOut) {
+  if (!fsMounted || isBitstreamFilePath(filePath) || isNonStreamableFilePath(filePath)) {
+    return false;
+  }
+
+  const String iniPath = makePerFileIniPath(filePath);
+  if (iniPath.length() == 0 || !LittleFS.exists(iniPath)) {
+    return false;
+  }
+
+  File iniFile = LittleFS.open(iniPath, "r");
+  if (!iniFile) {
+    return false;
+  }
+
+  bool found = false;
+  while (iniFile.available()) {
+    String line = iniFile.readStringUntil('\n');
+    line.trim();
+    if (line.length() == 0 || line.startsWith("#") || line.startsWith(";")) {
+      continue;
+    }
+
+    const int sep = line.indexOf('=');
+    if (sep <= 0) {
+      continue;
+    }
+
+    const String key = line.substring(0, sep);
+    const String value = line.substring(sep + 1);
+    if (key == F("chip_type")) {
+      uint32_t parsed = 0;
+      if (parseUnsignedValue(value, parsed) && parsed < kChipTypeCount && parsed <= 15) {
+        chipTypeOut = parsed;
+        found = true;
+      }
+      break;
+    }
+  }
+
+  iniFile.close();
+  return found;
+}
+
 // ################################################################################
 //
 //      #####  ####### ####### ####### ### #     #  #####   #####  
@@ -313,9 +331,12 @@ bool loadStartAddressForFile(const String &filePath, uint32_t &startAddrOut) {
 // last_filename=<last uploaded filename>
 // last_start=<last uploaded start address>
 // startup_fpga_path=<path to FPGA bitstream file>
+// autoplay=<1 to stream the selected file during startup>
 // sta_ssid=<Wi-Fi SSID for station mode>
 // sta_password=<Wi-Fi password for station mode>
 // chip_type=<chip type index from kChipTypeNames>
+// port0value=<Port 0 output byte>
+// port1value=<Port 1 output byte>
 // ################################################################################
 
 bool saveGlobalSettings() {
@@ -334,12 +355,18 @@ bool saveGlobalSettings() {
   iniFile.println(static_cast<unsigned long>(lastUploadStartAddr));
   iniFile.print(F("startup_fpga_path="));
   iniFile.println(startupFpgaPath);
+  iniFile.print(F("autoplay="));
+  iniFile.println(autoplayEnabled ? 1 : 0);
   iniFile.print(F("sta_ssid="));
   iniFile.println(staSsid);
   iniFile.print(F("sta_password="));
   iniFile.println(staPassword);
   iniFile.print(F("chip_type="));
   iniFile.println(static_cast<unsigned long>(currentChipTypeIndex));
+  iniFile.print(F("port0value="));
+  iniFile.println(static_cast<unsigned int>(port0value));
+  iniFile.print(F("port1value="));
+  iniFile.println(static_cast<unsigned int>(port1value));
   iniFile.close();
   return true;
 }
@@ -401,6 +428,10 @@ bool loadGlobalSettings() {
         startupFpgaPath = candidatePath;
         loadedAnything = true;
       }
+    } else if (key == F("autoplay")) {
+      autoplayEnabled = value == F("1") || value.equalsIgnoreCase(F("true")) ||
+                        value.equalsIgnoreCase(F("on"));
+      loadedAnything = true;
     } else if (key == F("sta_ssid")) {
       staSsid = value;
       loadedAnything = true;
@@ -411,6 +442,18 @@ bool loadGlobalSettings() {
       uint32_t parsed = 0;
       if (parseUnsignedValue(value, parsed) && parsed < kChipTypeCount && parsed <= 15) {
         currentChipTypeIndex = static_cast<uint8_t>(parsed);
+        loadedAnything = true;
+      }
+    } else if (key == F("port0value")) {
+      uint32_t parsed = 0;
+      if (parseUnsignedValue(value, parsed) && parsed <= 0xff) {
+        port0value = static_cast<uint8_t>(parsed);
+        loadedAnything = true;
+      }
+    } else if (key == F("port1value")) {
+      uint32_t parsed = 0;
+      if (parseUnsignedValue(value, parsed) && parsed <= 0xff) {
+        port1value = static_cast<uint8_t>(parsed);
         loadedAnything = true;
       }
     }
@@ -556,7 +599,6 @@ void handleSetChipType() {
   outputChipType(selectedIndex);
   currentChipTypeIndex = static_cast<uint8_t>(selectedIndex);
   if (currentChipTypeIndex >= 10) {
-    webUploadStartAddr = 0;
     lastUploadStartAddr = 0;
     lastStreamedStartAddr = 0;
   }
@@ -569,7 +611,6 @@ void handleSetChipType() {
 #else
   pendingMessage = F("Chip type selection is not supported in this SPI mode.");
 #endif
-  drawStatusBox();
   redirectToRoot();
 }
 
@@ -885,6 +926,12 @@ void handleRoot() {
     server.sendContent(formatAddressForInput(fpgaVersion));
     server.sendContent(F("</code></li>"));
   #endif
+  server.sendContent(F("<li><form method='POST' action='/set-autoplay' class='autoplay-form'>"));
+  server.sendContent(F("<label class='switch-label' for='autoplayToggle'><span>Autoplay on Startup </span><span class='switch'><input id='autoplayToggle' name='autoplay' type='checkbox' value='1' onchange='this.form.submit()'"));
+  if (autoplayEnabled) {
+    server.sendContent(F(" checked"));
+  }
+  server.sendContent(F("><span class='slider'></span></span></label></form></li>"));
   server.sendContent(F("</ul>"));
 
   server.sendContent(F("<div class='messages'>"));
@@ -980,8 +1027,8 @@ void handleStreamFile() {
   }
   lastStreamedStartAddr = startAddr;
 
-  if (!saveStartAddressForFile(path, startAddr)) {
-    pendingMessage = F("Selected file sent, but start address could not be saved.");
+  if (!saveFileSettingsForFile(path, startAddr)) {
+    pendingMessage = F("Selected file sent, but file settings could not be saved.");
     redirectToRoot();
     return;
   }
@@ -1054,10 +1101,20 @@ void handleResetSettings() {
   lastFilename = String();
   lastUploadStartAddr = 0;
   startupFpgaPath = F("/fpga_main.bit");
-  webUploadStartAddr = 0;
+  autoplayEnabled = false;
+  port0value = 0;
+  port1value = 0;
   staSsid = String(kStaSsid);
   staPassword = String(kStaPassword);
   pendingMessage = F("Saved defaults cleared.");
+  redirectToRoot();
+}
+
+void handleSetAutoplay() {
+  autoplayEnabled = server.hasArg("autoplay") && server.arg("autoplay") == F("1");
+  if (!saveGlobalSettings()) {
+    pendingMessage = F("Autoplay changed, but the setting could not be saved.");
+  }
   redirectToRoot();
 }
 
@@ -1079,7 +1136,12 @@ void handleSettingsData() {
   json += F("\",");
   json += F("\"sta_password\":\"");
   json += jsonEscape(staPassword);
-  json += F("\"");
+  json += F("\",");
+  json += F("\"port0value\":");
+  json += String(port0value);
+  json += F(",");
+  json += F("\"port1value\":");
+  json += String(port1value);
   json += F("}");
 
   server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -1122,6 +1184,18 @@ void handleSaveSettings() {
   startupFpgaPath = requestedStartupPath;
   staSsid = requestedStaSsid;
   staPassword = requestedStaPassword;
+  port0value = 0;
+  port1value = 0;
+  for (uint8_t bit = 0; bit < 8; ++bit) {
+    if (server.hasArg(String(F("port0_bit_")) + bit)) {
+      port0value |= static_cast<uint8_t>(1U << bit);
+    }
+    if (server.hasArg(String(F("port1_bit_")) + bit)) {
+      port1value |= static_cast<uint8_t>(1U << bit);
+    }
+  }
+  outputPort(0, port0value);
+  outputPort(1, port1value);
 
   if (!saveGlobalSettings()) {
     server.sendHeader("Location", "/settings.html?err=Failed%20to%20save%20.settings.ini", true);
@@ -1183,7 +1257,7 @@ void handleDumpEprom() {
     return;
   }
 
-  saveStartAddressForFile(dumpPath, startAddr);
+  saveFileSettingsForFile(dumpPath, startAddr);
 
   lastFilename = baseNameFromPath(dumpPath);
   lastFileBytes = len;
@@ -1221,8 +1295,6 @@ void handleStatus() {
   json += String(stagedFileBytes);
   json += F(",\"lastFileBytes\":");
   json += String(lastFileBytes);
-  json += F(",\"totalBytesSent\":");
-  json += String(totalBytesSent);
   json += F(",\"fsTotalBytes\":");
   json += String(fsTotalBytes);
   json += F(",\"fsUsedBytes\":");
@@ -1290,7 +1362,7 @@ void handleUpload() {
   if (upload.status == UPLOAD_FILE_START) {
     setUploadLed(true);
     dy1message(F("upl"));
-    drawStringBox("Upload", "File", 0);
+    drawStringBox("Upload", "File");
     currentUploadFsError = false;
 
     DPRINT(F("Upload start: "));
@@ -1298,8 +1370,6 @@ void handleUpload() {
 
     uploadInProgress = true;
     currentUploadFsError = !fsMounted;
-    currentUploadStartArgInvalid = false;
-    webUploadStartAddr = 0;
     const String formUploadName = server.hasArg("uploadName") ? server.arg("uploadName") : String();
     lastFilename = selectWebUploadName(upload.filename, formUploadName);
     currentFilePath = makeWebUploadFilePath(lastFilename);
@@ -1386,35 +1456,39 @@ void handleUploadDone() {
   } else if (stagedFileBytes == 0) {
     message = F("Upload received no data.");
   } else {
-    currentUploadStartArgInvalid = false;
-    webUploadStartAddr = 0;
+    uint32_t uploadStartAddr = 0;
     if (isBitstreamFilePath(currentFilePath)) {
       startupFpgaPath = normalizeFsPath(currentFilePath);
+      if (jtagCheckIDcode()) {
+        pendingMessage = "FPGA configured from uploaded bitstream.";
+        jtagConfigure(startupFpgaPath);
+        saveGlobalSettings();
+      } else {
+        pendingMessage = "FPGA ID code check failed.";
+      }
+      redirectToRoot();
+      return;
     }
-    if (!server.hasArg("start") || !parseUnsignedValue(server.arg("start"), webUploadStartAddr)) {
-      currentUploadStartArgInvalid = true;
+    if (!server.hasArg("start") || !parseUnsignedValue(server.arg("start"), uploadStartAddr)) {
       message = F("Upload failed: invalid start address.");
-    } else if (!saveStartAddressForFile(currentFilePath, webUploadStartAddr)) {
-      message = F("Upload failed: could not save start address.");
+    } else if (!saveFileSettingsForFile(currentFilePath, uploadStartAddr)) {
+      message = F("Upload failed: could not save file settings.");
     } else {
       if (isNonStreamableFilePath(currentFilePath)) {
         message = F("Upload stored. Streaming skipped for .css/.html file types.");
-      } else if (!startPlaybackFromStaging(webUploadStartAddr, currentFilePath)) {
-        message = isBitstreamFilePath(currentFilePath)
-                      ? F("Upload failed: could not configure staged file.")
-                      : F("Upload failed: could not stream staged file.");
+      } else if (!startPlaybackFromStaging(uploadStartAddr, currentFilePath)) {
+        message =  F("Upload failed: could not configure staged file.");
       }
 
       if (message.length() == 0) {
+        // No errors, so update last file info and save global settings.
         lastFilename = baseNameFromPath(currentFilePath);
-        lastUploadStartAddr = webUploadStartAddr;
-        lastStreamedStartAddr = webUploadStartAddr;
+        lastUploadStartAddr = uploadStartAddr;
         if (isBitstreamFilePath(currentFilePath)) {
           startupFpgaPath = normalizeFsPath(currentFilePath);
         }
         if (!saveGlobalSettings()) {
-          message = F("Upload failed: could not save global settings.");
-          pendingMessage = message;
+          pendingMessage = F("Upload failed: could not save global settings.");
           redirectToRoot();
           return;
         }
@@ -1425,8 +1499,6 @@ void handleUploadDone() {
       }
     }
   }
-  readyMessage();
-
   pendingMessage = message;
   redirectToRoot();
 }
@@ -1446,6 +1518,7 @@ void handleUploadDone() {
 // ##############################################################################
                                                                               
 void serverInit() {
+  Serial.println();
 #if defined(STA_MODE)
   WiFi.mode(WIFI_STA);
   WiFi.begin(staSsid.c_str(), staPassword.c_str());
@@ -1456,10 +1529,10 @@ void serverInit() {
   unsigned long startMs = millis();
   while (WiFi.status() != WL_CONNECTED && (millis() - startMs) < 5000UL) {
     digitalWrite(LED_BUILTIN, HIGH);
-    delay(200);
+    delay(250);
     digitalWrite(LED_BUILTIN, LOW);
-    delay(200);
-    Serial.print(F("."));
+    delay(250);
+    Serial.write('.');
   }
   Serial.println();
 
@@ -1507,6 +1580,7 @@ void serverInit() {
   server.on("/save-settings", HTTP_POST, handleSaveSettings);
   server.on("/download-file", HTTP_GET, handleDownloadFile);
   server.on("/set-chip-type", HTTP_POST, handleSetChipType);
+  server.on("/set-autoplay", HTTP_POST, handleSetAutoplay);
   server.on("/stream-file", HTTP_POST, handleStreamFile);
   server.on("/delete-file", HTTP_POST, handleDeleteFile);
   server.on("/reset-settings", HTTP_POST, handleResetSettings);

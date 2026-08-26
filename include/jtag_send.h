@@ -50,8 +50,6 @@ const int TMS_PIN = 2; // D4 / GPIO-2 (output)
 
 #define MAX_BUF_SIZE (4096)
 
-boolean config_fpga = false;
-
 // union of 8 and 32 bit buffer for faster access -- does not pay due to wrong byte order
 // union {
 //   uint8_t bytes[MAX_BUF_SIZE];
@@ -59,6 +57,11 @@ boolean config_fpga = false;
 // } buffer;
 
 uint8_t buf[MAX_BUF_SIZE];
+
+uint32_t jtagIDcode = 0;
+uint32_t fpgaVersion = 0;
+bool fpgaValid = false;
+bool fpgaConfigured = false;
 
 // see: Spartan-6 FPGA Configuration User Guide UG380 (v2.10) March 31, 2017
 #define XILINX_IR_LEN             (6)
@@ -102,12 +105,15 @@ uint8_t buf[MAX_BUF_SIZE];
 
 #define TCK_PULSE  GPOC = (1<<TCK_PIN); GPOS = (1<<TCK_PIN)
 
-void jtag_goto_runtest_idle() {
-  TCK_LOW;
+void jtag_tl_reset() {
   TMS_HIGH;
-  for ( int i=0; i < 8; i++ ) {
+  for ( int i=0; i < 5; i++ ) {
     TCK_PULSE;
   }
+}
+
+void jtag_goto_runtest_idle() {
+  jtag_tl_reset();
   TMS_LOW;
   TCK_PULSE;  // goto Run-Test/Idle
 }
@@ -121,20 +127,20 @@ void jtag_load_ir( uint32_t instr, int ir_len ) {
   TCK_PULSE;  // goto Capture-IR
   TCK_PULSE;  // goto shift-IR
   for ( int i=0; i < ir_len; i++ ) {
-     if (instr & 1) {
+    // shift LSB first
+    if (instr & 1) {
        TDI_HIGH;
      } else {
        TDI_LOW;
      }
+     // leave with TMS high on last bit to go to Exit1-IR state
      if (i==(ir_len-1)) {
        TMS_HIGH;
-     } else {
-       TMS_LOW;
      }
      TCK_PULSE; // goto Exit1-IR or shift-DR
      instr = (instr >> 1);
   }
-  TMS_HIGH;
+  // TMS is still high, so we are now in Exit1-IR state
   TCK_PULSE;  // goto Update-IR
   TMS_LOW;
   TCK_PULSE;  // goto Run-Test/Idle
@@ -152,6 +158,14 @@ void jtag_shift_last_byte(uint8_t data) {
       TDI_LOW;
     }
     data = data << 1;                     // shift-to-left
+    TCK_PULSE;
+  }
+}
+
+void jtag_shift_dummy_byte() {
+  // shift the last byte with TMS high on last bit
+  TDI_LOW;
+  for ( int i=0; i < 8; i++ ) {           // for each bit of the byte data
     TCK_PULSE;
   }
 }
@@ -179,31 +193,23 @@ void jtag_shift_chunk(int chunk_size) {
 }
 
 void jtag_shift_last_chunk(int chunk_size) {
+  // jtag_shift_chunk(chunk_size);
   jtag_shift_chunk(chunk_size - 1); // shift all but the last byte
+  // for ( int i=0; i < 7; i++ ) {           // for each bit of the byte data
+  //   jtag_shift_dummy_byte(); // shift a dummy byte to get to Exit1-DR state
+  // }
   // shift the last byte with TMS high on last bit
   jtag_shift_last_byte(buf[chunk_size-1]);
+  jtag_shift_last_byte(0);
 }
 
 
-// ############################################################################
-//
-//      #####  ####### #     # ####### ###  #####  
-//     #     # #     # ##    # #        #  #     # 
-//     #       #     # # #   # #        #  #       
-//     #       #     # #  #  # #####    #  #  #### 
-//     #       #     # #   # # #        #  #     # 
-//     #     # #     # #    ## #        #  #     # 
-//      #####  ####### #     # #       ###  #####  
-//
-// ############################################################################
-// Configure FPGA using JTAG port and the bitstream file stored in LittleFS
-// ############################################################################
-
-
-uint32_t jtagReadIDcode() {
+uint32_t jtag_get_IDcode() {
+  TCK_LOW;
   pinMode( TCK_PIN, OUTPUT );
   pinMode( TMS_PIN, OUTPUT );
   pinMode( TDI_PIN, OUTPUT );
+  pinMode( TDO_PIN, INPUT );
   int tdo;
   uint32_t idcode = 0;
   jtag_goto_runtest_idle();
@@ -233,10 +239,40 @@ uint32_t jtagReadIDcode() {
   return idcode;
 }
 
+// ############################################################################
+//
+//      #####  ####### #     # ####### ###  #####  
+//     #     # #     # ##    # #        #  #     # 
+//     #       #     # # #   # #        #  #       
+//     #       #     # #  #  # #####    #  #  #### 
+//     #       #     # #   # # #        #  #     # 
+//     #     # #     # #    ## #        #  #     # 
+//      #####  ####### #     # #       ###  #####  
+//
+// ############################################################################
+// Configure FPGA using JTAG port and the bitstream file stored in LittleFS
+// ############################################################################
+
+
+bool jtagCheckIDcode() {
+  jtagIDcode = jtag_get_IDcode();
+  if ((jtagIDcode & 0x0FFF) == 0x0093) {
+    // Valid Xilinx Manufacturer ID code
+    fpgaValid = true;
+    return true;
+  } else {
+    fpgaConfigured = false;
+    fpgaValid = false;
+    return false;
+  }
+}
+
 void jtagConfigure(const String &config_file) {
+  TCK_LOW;
   pinMode( TCK_PIN, OUTPUT );
   pinMode( TMS_PIN, OUTPUT );
   pinMode( TDI_PIN, OUTPUT );
+  pinMode( TDO_PIN, INPUT );
   Serial.println();
   printCenteredSerial(F("FPGA Config"));
   // configure GPIO pins for JTAG link 
@@ -306,11 +342,17 @@ void jtagConfigure(const String &config_file) {
 
   DPRINTLNF("Phase 15: Send JSTART instruction" );
   jtag_load_ir( XILINX_JSTART_INSTR, XILINX_IR_LEN );
-
-  // toggle TCK for startup sequence
-  for ( int i=0; i < 32; i++ ) {
+  // TMS still low, toggle TCK for startup sequence
+  for ( int i=0; i < 64; i++ ) {
     TCK_PULSE;  // stay at Run-Test/Idle state
   }
+  TMS_HIGH;
+  TCK_PULSE;
+  TCK_PULSE;
+  TCK_PULSE;
+  pinMode( TCK_PIN, INPUT );
+  pinMode( TMS_PIN, INPUT );
+  pinMode( TDI_PIN, INPUT );
   uint32_t te = millis(); // Stopwatch for measuring configuration time
  
   Serial.print(F("Bitstream size: "));
@@ -320,6 +362,7 @@ void jtagConfigure(const String &config_file) {
   Serial.print(te - ts);
   Serial.println(F(" msec"));
   printDivLine();
+  fpgaConfigured = true;
 }
 
 #endif // JTAG_SEND_H
