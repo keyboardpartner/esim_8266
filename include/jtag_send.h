@@ -195,11 +195,6 @@ void jtag_shift_last_chunk(int chunk_size) {
 
 
 uint32_t jtag_get_IDcode() {
-  TCK_LOW;
-  pinMode( TCK_PIN, OUTPUT );
-  pinMode( TMS_PIN, OUTPUT );
-  pinMode( TDI_PIN, OUTPUT );
-  pinMode( TDO_PIN, INPUT );
   int tdo;
   uint32_t idcode = 0;
   // start from Run-Test/Idle state
@@ -229,19 +224,18 @@ uint32_t jtag_get_IDcode() {
 }
 
 int jtag_shift_file(File bitfile) {
-  int num_read_total = 0;
   int file_size = bitfile.size();  // get file size (in bytes)
+  int num_read_total = 0;
+  Serial.print( "Progress: " );
   // start from Run-Test/Idle state
-  TMS_HIGH; 
-  TCK_PULSE; // goto Select-DR-Scan
+  TMS_HIGH;
+  TCK_PULSE;  // goto Select-DR-Scan
   TMS_LOW;
-  TCK_PULSE; // goto Capture-DR
-  TCK_PULSE; // goto Shift-DR
-
+  TCK_PULSE;  // goto Capture-DR
+  TCK_PULSE;  // goto Shift-DR
   // now in Shift-DR state, TMS is still low, so we can shift in the data stream
   int chunk_count = 0;
-  Serial.print( "Progress: " );
-
+  
   while ( bitfile.available() ) {
     int chunk_size = bitfile.read(buf, MAX_BUF_SIZE-1);
     num_read_total += chunk_size;
@@ -257,19 +251,19 @@ int jtag_shift_file(File bitfile) {
     }
     chunk_count++;
   }
-  Serial.println(F(" Done."));
-  
   // now in Exit1-DR state
   TMS_HIGH;
   TCK_PULSE;  // goto Update-DR
   TMS_LOW;
   TCK_PULSE;  // goto Run-Test/Idle
+  Serial.println(F(" Done."));
   return num_read_total;
 }
 
 void jtag_startup_clk() {
-  // TMS still low, toggle TCK for startup sequence
-  for ( int i=0; i < 31; i++ ) {
+  // toggle TCK for startup sequence
+  TMS_LOW;
+  for ( int i=0; i < 64; i++ ) {
     TCK_PULSE;  // stay at Run-Test/Idle state
   }
   TMS_HIGH;
@@ -294,6 +288,11 @@ void jtag_startup_clk() {
 
 
 bool jtagCheckIDcode() {
+  TCK_LOW;
+  pinMode( TCK_PIN, OUTPUT );
+  pinMode( TMS_PIN, OUTPUT );
+  pinMode( TDI_PIN, OUTPUT );
+  pinMode( TDO_PIN, INPUT );
   jtagIDcode = jtag_get_IDcode();
   if ((jtagIDcode & 0x0FFF) == 0x0093) {
     // Valid Xilinx Manufacturer ID code
@@ -315,8 +314,8 @@ void jtagConfigure(const String &config_file) {
   Serial.println();
   printCenteredSerial(F("FPGA Config"));
   // configure GPIO pins for JTAG link 
-  int num_read_total = 0;
   String str;
+  int num_read_total = 0;
   
   File f = LittleFS.open(config_file.c_str(), "r");
   if (!f) {
@@ -325,13 +324,12 @@ void jtagConfigure(const String &config_file) {
     return;
   }
 
-  // goto RunTest/Idle
   Serial.print(F("Sending File: "));
   Serial.println(config_file);
- uint32_t ts = millis(); // Stopwatch for measuring configuration time
 
   // refer to page 171 UG380 Spartan-6 FPGA Configuration User Guide and sample SVF file
 
+  uint32_t ts = millis(); // Stopwatch for measuring configuration time
   // aus SVF file entnommen
   jtag_load_ir( XILINX_BYPASS_INSTR );
   jtag_load_ir( XILINX_JPROGRAM_INSTR );
@@ -339,11 +337,12 @@ void jtagConfigure(const String &config_file) {
   delay(10); // wait for 10 ms to allow the FPGA to enter configuration mode
   jtag_load_ir( XILINX_CFG_IN_INSTR );
   num_read_total = jtag_shift_file(f);
+  f.close();
   
   jtag_load_ir( XILINX_JSTART_INSTR );
-  jtag_startup_clk();
+  jtag_startup_clk();  // toggle TCK for startup sequence
   jtag_load_ir( XILINX_BYPASS_INSTR );
-
+  
   uint32_t te = millis(); // Stopwatch for measuring configuration time
  
   Serial.print(F("Bitstream size: "));
