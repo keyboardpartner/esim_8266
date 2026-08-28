@@ -199,8 +199,6 @@ WifiMode currentWifiMode = WifiMode_Unknown;
 String wifiModeLabel = "AP";
 String wifiIpAddress = "192.168.4.1";
 
-String lastFilename;
-size_t lastFileBytes = 0;
 bool uploadInProgress = false;
 bool fsMounted = false;
 
@@ -210,6 +208,8 @@ size_t streamOffset = 0;
 String currentFilePath;
 String pendingSerialFilename;
 
+String lastFilename;
+size_t lastFileBytes = 0;
 uint32_t lastUploadStartAddr = 0;
 uint32_t lastStreamedStartAddr = 0;
 

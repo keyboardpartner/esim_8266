@@ -247,12 +247,17 @@ void setup() {
       }
     }
   #endif
-  outputPort(0, port0value); // set all outputs
-  outputPort(1, port1value); // set all outputs
+
   if (autoplayEnabled && !isBitstreamFilePath(currentFilePath)) {
     startPlaybackFromStaging(resolveStartAddressForPath(currentFilePath), currentFilePath);
   }
 
+  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+    outputChipType(currentChipTypeIndex);
+    outputPort(0, port0value); // set all outputs
+    outputPort(1, port1value); // set all outputs
+  #endif
+  
   #ifdef USE_WEB_SERVER
     dy1message(F("con"));
     drawMsgBox(F("Wi-Fi"), F("Connect"), DB_INFO);

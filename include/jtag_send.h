@@ -71,7 +71,7 @@ bool fpgaConfigured = false;
 #define XILINX_USER4_INSTR        (0x1B)  // 011011
 #define XILINX_CFG_OUT_INSTR      (0x04)  // 000100
 #define XILINX_CFG_IN_INSTR       (0x05)  // 000101
-#define XILINX_BYPASS_INSTR       (0x1F)  // 111111
+#define XILINX_BYPASS_INSTR       (0x3F)  // 111111
 #define XILINX_IDCODE_INSTR       (0x09)  // 001001
 #define XILINX_USERCODE_INSTR     (0x08)  // 001000
 #define XILINX_JPROGRAM_INSTR     (0x0B)  // 001011
@@ -118,15 +118,16 @@ void jtag_goto_runtest_idle() {
   TCK_PULSE;  // goto Run-Test/Idle
 }
 
-void jtag_load_ir( uint32_t instr, int ir_len ) {
+void jtag_load_ir(uint32_t instr) {
   // start from Run-Test/Idle state
+  jtag_goto_runtest_idle();
   TMS_HIGH;
   TCK_PULSE;  // goto Select-DR-Scan
   TCK_PULSE;  // goto Select-IR-Scan
   TMS_LOW;
   TCK_PULSE;  // goto Capture-IR
   TCK_PULSE;  // goto shift-IR
-  for ( int i=0; i < ir_len; i++ ) {
+  for ( int i=0; i < XILINX_IR_LEN; i++ ) {
     // shift LSB first
     if (instr & 1) {
        TDI_HIGH;
@@ -134,7 +135,7 @@ void jtag_load_ir( uint32_t instr, int ir_len ) {
        TDI_LOW;
      }
      // leave with TMS high on last bit to go to Exit1-IR state
-     if (i==(ir_len-1)) {
+     if (i==(XILINX_IR_LEN-1)) {
        TMS_HIGH;
      }
      TCK_PULSE; // goto Exit1-IR or shift-DR
@@ -143,7 +144,7 @@ void jtag_load_ir( uint32_t instr, int ir_len ) {
   // TMS is still high, so we are now in Exit1-IR state
   TCK_PULSE;  // goto Update-IR
   TMS_LOW;
-  TCK_PULSE;  // goto Run-Test/Idle
+  TCK_PULSE;  // back Run-Test/Idle
 }
 
 void jtag_shift_last_byte(uint8_t data) {
@@ -158,14 +159,6 @@ void jtag_shift_last_byte(uint8_t data) {
       TDI_LOW;
     }
     data = data << 1;                     // shift-to-left
-    TCK_PULSE;
-  }
-}
-
-void jtag_shift_dummy_byte() {
-  // shift the last byte with TMS high on last bit
-  TDI_LOW;
-  for ( int i=0; i < 8; i++ ) {           // for each bit of the byte data
     TCK_PULSE;
   }
 }
@@ -195,9 +188,6 @@ void jtag_shift_chunk(int chunk_size) {
 void jtag_shift_last_chunk(int chunk_size) {
   // jtag_shift_chunk(chunk_size);
   jtag_shift_chunk(chunk_size - 1); // shift all but the last byte
-  // for ( int i=0; i < 7; i++ ) {           // for each bit of the byte data
-  //   jtag_shift_dummy_byte(); // shift a dummy byte to get to Exit1-DR state
-  // }
   // shift the last byte with TMS high on last bit
   jtag_shift_last_byte(buf[chunk_size-1]);
   jtag_shift_last_byte(0);
@@ -212,9 +202,8 @@ uint32_t jtag_get_IDcode() {
   pinMode( TDO_PIN, INPUT );
   int tdo;
   uint32_t idcode = 0;
-  jtag_goto_runtest_idle();
-  jtag_load_ir( XILINX_IDCODE_INSTR, XILINX_IR_LEN );
   // start from Run-Test/Idle state
+  jtag_load_ir( XILINX_IDCODE_INSTR );
   TMS_HIGH;
   TCK_PULSE;  // goto Select-DR-Scan
   TMS_LOW;
@@ -237,6 +226,56 @@ uint32_t jtag_get_IDcode() {
   TMS_LOW;
   TCK_PULSE;  // goto Run-Test/Idle
   return idcode;
+}
+
+int jtag_shift_file(File bitfile) {
+  int num_read_total = 0;
+  int file_size = bitfile.size();  // get file size (in bytes)
+  // start from Run-Test/Idle state
+  TMS_HIGH; 
+  TCK_PULSE; // goto Select-DR-Scan
+  TMS_LOW;
+  TCK_PULSE; // goto Capture-DR
+  TCK_PULSE; // goto Shift-DR
+
+  // now in Shift-DR state, TMS is still low, so we can shift in the data stream
+  int chunk_count = 0;
+  Serial.print( "Progress: " );
+
+  while ( bitfile.available() ) {
+    int chunk_size = bitfile.read(buf, MAX_BUF_SIZE-1);
+    num_read_total += chunk_size;
+    if (num_read_total==file_size) {
+      // last chunk, so we need to go to Exit1-DR state after the last bit
+      jtag_shift_last_chunk(chunk_size);
+    } else {
+      jtag_shift_chunk(chunk_size);
+    }
+    if (chunk_count % 16 == 0) {
+      delay(0); yield();
+      Serial.print(".");
+    }
+    chunk_count++;
+  }
+  Serial.println(F(" Done."));
+  
+  // now in Exit1-DR state
+  TMS_HIGH;
+  TCK_PULSE;  // goto Update-DR
+  TMS_LOW;
+  TCK_PULSE;  // goto Run-Test/Idle
+  return num_read_total;
+}
+
+void jtag_startup_clk() {
+  // TMS still low, toggle TCK for startup sequence
+  for ( int i=0; i < 31; i++ ) {
+    TCK_PULSE;  // stay at Run-Test/Idle state
+  }
+  TMS_HIGH;
+  TCK_PULSE;
+  TCK_PULSE;
+  TCK_PULSE;
 }
 
 // ############################################################################
@@ -285,74 +324,26 @@ void jtagConfigure(const String &config_file) {
     Serial.println(config_file);
     return;
   }
-  int file_size = f.size();  // get file size (in bytes)
-
-  uint32_t ts = millis(); // Stopwatch for measuring configuration time
 
   // goto RunTest/Idle
-  jtag_goto_runtest_idle();
   Serial.print(F("Sending File: "));
   Serial.println(config_file);
+ uint32_t ts = millis(); // Stopwatch for measuring configuration time
 
-  // refer to page 171 UG380 Spartan-6 FPGA Configuration User Guide
-  DPRINTLNF( "Phase 1: Send JSHUTDOWN instruction" ); 
-  jtag_load_ir( XILINX_JSHUTDOWN_INSTR, XILINX_IR_LEN );
-  for ( int i=0; i < 32; i++ ) {
-    TCK_PULSE;  // stay at Run-Test/Idle state
-  }
+  // refer to page 171 UG380 Spartan-6 FPGA Configuration User Guide and sample SVF file
 
-  DPRINTLNF( "Phase 5: Send CFG_IN instruction" );
-  jtag_load_ir( XILINX_CFG_IN_INSTR, XILINX_IR_LEN );
-
-  // start from Run-Test/Idle state
-  TMS_HIGH; 
-  TCK_PULSE; // goto Select-DR-Scan
-  TMS_LOW;
-  TCK_PULSE; // goto Capture-DR
-  TCK_PULSE; // goto Shift-DR
-  DPRINTLNF( "Phase 9: Shift in datastream" );
-
-  // now in Shift-DR state, TMS is still low, so we can shift in the data stream
-  int chunk_count = 0;
-  Serial.print( "Progress: " );
-
-  while ( f.available() ) {
-    int chunk_size = f.read(buf, MAX_BUF_SIZE-1);
-    num_read_total += chunk_size;
-    if (num_read_total==file_size) {
-      // last chunk, so we need to go to Exit1-DR state after the last bit
-      jtag_shift_last_chunk(chunk_size);
-    } else {
-      jtag_shift_chunk(chunk_size);
-    }
-    if (chunk_count % 16 == 0) {
-      delay(0); yield();
-      Serial.print(".");
-    }
-    chunk_count++;
-  }
-  Serial.println(F(" Done."));
-  f.close();
+  // aus SVF file entnommen
+  jtag_load_ir( XILINX_BYPASS_INSTR );
+  jtag_load_ir( XILINX_JPROGRAM_INSTR );
+  jtag_load_ir( XILINX_CFG_IN_INSTR );
+  delay(10); // wait for 10 ms to allow the FPGA to enter configuration mode
+  jtag_load_ir( XILINX_CFG_IN_INSTR );
+  num_read_total = jtag_shift_file(f);
   
-  // now in Exit1-DR state
-  TMS_HIGH;
-  TCK_PULSE;  // goto Update-DR
-  TMS_LOW;
-  TCK_PULSE;  // goto Run-Test/Idle
+  jtag_load_ir( XILINX_JSTART_INSTR );
+  jtag_startup_clk();
+  jtag_load_ir( XILINX_BYPASS_INSTR );
 
-  DPRINTLNF("Phase 15: Send JSTART instruction" );
-  jtag_load_ir( XILINX_JSTART_INSTR, XILINX_IR_LEN );
-  // TMS still low, toggle TCK for startup sequence
-  for ( int i=0; i < 64; i++ ) {
-    TCK_PULSE;  // stay at Run-Test/Idle state
-  }
-  TMS_HIGH;
-  TCK_PULSE;
-  TCK_PULSE;
-  TCK_PULSE;
-  pinMode( TCK_PIN, INPUT );
-  pinMode( TMS_PIN, INPUT );
-  pinMode( TDI_PIN, INPUT );
   uint32_t te = millis(); // Stopwatch for measuring configuration time
  
   Serial.print(F("Bitstream size: "));

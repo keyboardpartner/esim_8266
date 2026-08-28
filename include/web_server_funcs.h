@@ -469,9 +469,11 @@ bool loadGlobalSettings() {
     startupFpgaPath = F("/fpga_main.bit");
   }
 
-#if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
-  outputChipType(currentChipTypeIndex);
-#endif
+  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+    outputChipType(currentChipTypeIndex);
+    outputPort(0, port0value); // set all outputs
+    outputPort(1, port1value); // set all outputs
+  #endif
 
   return loadedAnything;
 }
@@ -1001,8 +1003,6 @@ void handleStreamFile() {
 
   currentFilePath = path;
   stagedFileBytes = f.size();
-  lastFileBytes = stagedFileBytes;
-  lastFilename = path;
   f.close();
 
   if (stagedFileBytes == 0) {
@@ -1025,7 +1025,6 @@ void handleStreamFile() {
     redirectToRoot();
     return;
   }
-  lastStreamedStartAddr = startAddr;
 
   if (!saveFileSettingsForFile(path, startAddr)) {
     pendingMessage = F("Selected file sent, but file settings could not be saved.");
@@ -1033,6 +1032,12 @@ void handleStreamFile() {
     return;
   }
 
+  if(!stagedIsBitstream) {
+    lastFileBytes = stagedFileBytes;
+    lastFilename = path;
+    lastStreamedStartAddr = startAddr;
+  }
+  
   lastFilename = baseNameFromPath(path);
   lastUploadStartAddr = startAddr;
   if (!saveGlobalSettings()) {

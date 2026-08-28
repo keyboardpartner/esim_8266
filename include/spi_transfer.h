@@ -366,7 +366,7 @@ void outputChipType(uint8_t value) {
   #endif
 }
 
-void outputPort(int port, uint8_t value) {
+void outputPort(uint8_t port, uint8_t value) {
   #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
     SS_LOW;
     uint16_t set_port_cmd = setPortCmd | (port & 0x0F); // set port command (0x40..0x4F)
