@@ -199,7 +199,8 @@ void setUpSendLed(bool on) {
     SPI.write(resetLineCmd);
     SPI.write(0); // set reset line bit to 0 (inactive)
     SS_HIGH;
-   }
+    Serial.println(F("FPGA reset done."));
+  }
 
   void testSPItransfer() {
     // Write test pattern to internal registers and read back to verify correctness.

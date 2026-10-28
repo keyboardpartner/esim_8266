@@ -93,6 +93,7 @@ bool startPlaybackFromStaging(uint32_t startAddr, const String &filePath) {
   stopBlockTransfer();
 
   playbackFile.close();
+  resetChip(); // send reset signal to spi_ports instantiation in FPGA
   Serial.print(F("Done in"));
   Serial.printf(" %lu ms, bytes sent: %u\n", (unsigned long)(millis() - start_time), playbackBytesSent);
   clearDataBus();

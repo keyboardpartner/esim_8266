@@ -73,7 +73,7 @@ String months[12]={"January", "February", "March", "April", "May", "June", "July
 // uncomment to use board with XILINX FPGAs
 #define JTAG_XILINX
 
-constexpr const char *versionString = "0.92";
+constexpr const char *versionString = "0.97";
 
 #ifdef DEBUG
   #define DPRINT(...)    Serial.print(__VA_ARGS__)

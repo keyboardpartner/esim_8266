@@ -824,7 +824,7 @@ void handleRoot() {
   #endif
 
   server.sendContent(F("<form method='POST' action='/set-chip-type' style='margin:0 0 12px 0'>"));
-  server.sendContent(F("<label for='chipTypeSelect' style='margin:0 0 6px'>Chip Type</label>"));
+  server.sendContent(F("<label for='chipTypeSelect' style='margin:0 0 6px'>RAM/ROM Chip Type</label>"));
   server.sendContent(F("<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'>"));
   server.sendContent(F("<select id='chipTypeSelect' name='chip_type' style='display:block;width:160px;padding:12px;background:#0b1220;border:1px solid #334155;color:#e2e8f0;border-radius:10px;box-sizing:border-box'>"));
   for (size_t i = 0; i < kChipTypeCount; ++i) {
@@ -845,7 +845,7 @@ void handleRoot() {
 
   server.sendContent(F("<form id='uploadForm' method='POST' action='/upload' enctype='multipart/form-data'>"));
   server.sendContent(F("<table style='width:100%;border-collapse:collapse;margin:6px 0'><tr>"));
-  server.sendContent(F("<td style='padding:0 4px 0 0;width:78%;box-sizing:border-box'><label for='binfile' style='display:block;margin:0 0 6px'>Binary file</label><input id='binfile' name='binfile' type='file' accept='.bin,.bit,.dat,.rom,application/octet-stream' required></td>"));
+  server.sendContent(F("<td style='padding:0 4px 0 0;width:78%;box-sizing:border-box'><label for='binfile' style='display:block;margin:0 0 6px'>Binary file to upload</label><input id='binfile' name='binfile' type='file' accept='.bin,.bit,.dat,.rom,application/octet-stream' required></td>"));
   server.sendContent(F("<td style='padding:0 0 0 4px;width:22%;box-sizing:border-box'><label for='uploadStart' style='display:block;margin:0 0 6px'>Start (dec/0x)</label><input id='uploadStart' name='start' type='text' value='"));
   server.sendContent(htmlEscape(formatAddressForInput(lastUploadStartAddr)));
   server.sendContent(F("' maxlength='10' style='max-width:11ch' required></td>"));

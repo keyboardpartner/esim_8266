@@ -305,6 +305,8 @@ bool jtagCheckIDcode() {
   }
 }
 
+void resetChip(); // defined in spi_transfer.h
+
 void jtagConfigure(const String &config_file) {
   TCK_LOW;
   pinMode( TCK_PIN, OUTPUT );
@@ -351,8 +353,10 @@ void jtagConfigure(const String &config_file) {
   Serial.print(F("Configuration done in "));
   Serial.print(te - ts);
   Serial.println(F(" msec"));
+  resetChip(); // send reset signal to spi_ports instantiation in FPGA
   printDivLine();
   fpgaConfigured = true;
+
 }
 
 #endif // JTAG_SEND_H
