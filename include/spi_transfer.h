@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+void outputPort(uint8_t port, uint8_t value);
+
 // ################################################################################
 //
 //      #####  ######  ###       #     # ####### ####### ######  
@@ -18,19 +20,19 @@
 
 // Controls the onboard LED used as HTTP upload activity indicator.
 void setUploadLed(bool on) {
-  #ifndef JTAG_SPARTAN6
+  #ifndef JTAG_XILINX
     digitalWrite(LED_UPLOAD, on ? HIGH : LOW);
   #endif
 }
 
 // Controls a dedicated LED that indicates active file playback/streaming.
 void setUpSendLed(bool on) {
-  #ifndef JTAG_SPARTAN6
+  #ifndef JTAG_XILINX
     digitalWrite(LED_SENDDATA, on ? HIGH : LOW);
   #endif
 }
 
-#if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+#if defined(GODIL_SPI) || defined(JTAG_XILINX)
 
   #define SS_HIGH  GPOS = (1<<LATCH_PIN)
   #define SS_LOW   GPOC = (1<<LATCH_PIN)
@@ -184,6 +186,20 @@ void setUpSendLed(bool on) {
     Serial.println(len);
     return true;
   }
+
+  void resetChip() {
+    outputPort(0, port0value); // set all outputs
+    outputPort(1, port1value); // set all outputs
+    SS_LOW;
+    SPI.write(resetLineCmd); // set address to read or write
+    SPI.write(1); // set reset line bit to 1 (active)
+    SS_HIGH;
+    delayMicroseconds(50); // wait for FPGA to process the command
+    SS_LOW;
+    SPI.write(resetLineCmd);
+    SPI.write(0); // set reset line bit to 0 (inactive)
+    SS_HIGH;
+   }
 
   void testSPItransfer() {
     // Write test pattern to internal registers and read back to verify correctness.
@@ -357,7 +373,7 @@ void setUpSendLed(bool on) {
 // Sends chip type ID (0..15) to device output for GODIL/JTAG modes.
 // Other modes ignore this setting.
 void outputChipType(uint8_t value) {
-  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+  #if defined(GODIL_SPI) || defined(JTAG_XILINX)
     SS_LOW;
     SPI.write16(setChipTypeCmd << 8 | value); // write data command with autoinc after write
     SS_HIGH;
@@ -367,7 +383,7 @@ void outputChipType(uint8_t value) {
 }
 
 void outputPort(uint8_t port, uint8_t value) {
-  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+  #if defined(GODIL_SPI) || defined(JTAG_XILINX)
     SS_LOW;
     uint16_t set_port_cmd = setPortCmd | (port & 0x0F); // set port command (0x40..0x4F)
     SPI.write16(set_port_cmd << 8 | value); // write data command with autoinc after write

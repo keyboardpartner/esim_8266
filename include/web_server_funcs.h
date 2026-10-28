@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+#if defined(GODIL_SPI) || defined(JTAG_XILINX)
 void outputChipType(uint8_t value);
 #endif
 
@@ -394,6 +394,12 @@ bool loadGlobalSettings() {
     return false;
   }
 
+  #if defined(GODIL_SPI) || defined(JTAG_XILINX)
+    outputChipType(currentChipTypeIndex);
+    outputPort(0, port0value); // set all outputs
+    outputPort(1, port1value); // set all outputs
+  #endif
+  
   bool loadedAnything = false;
   while (iniFile.available()) {
     String line = iniFile.readStringUntil('\n');
@@ -469,7 +475,7 @@ bool loadGlobalSettings() {
     startupFpgaPath = F("/fpga_main.bit");
   }
 
-  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+  #if defined(GODIL_SPI) || defined(JTAG_XILINX)
     outputChipType(currentChipTypeIndex);
     outputPort(0, port0value); // set all outputs
     outputPort(1, port1value); // set all outputs
@@ -597,7 +603,7 @@ void handleSetChipType() {
     return;
   }
 
-#if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+#if defined(GODIL_SPI) || defined(JTAG_XILINX)
   outputChipType(selectedIndex);
   currentChipTypeIndex = static_cast<uint8_t>(selectedIndex);
   if (currentChipTypeIndex >= 10) {
@@ -791,7 +797,7 @@ void handleRoot() {
   #ifdef PEPS_SPI
     server.sendContent(F("<title>PEPS Binary Uploader</title>"));
   #endif
-  #ifdef JTAG_SPARTAN6
+  #ifdef JTAG_XILINX
     server.sendContent(F("<title>JTAG Configurator and Uploader</title>"));
   #endif
   server.sendContent(F("<link rel='stylesheet' href='/style.css'></head><body><div class='card'>"));
@@ -811,7 +817,7 @@ void handleRoot() {
     server.sendContent(versionString);
     server.sendContent(F("</h3>"));
   #endif
-  #ifdef JTAG_SPARTAN6
+  #ifdef JTAG_XILINX
     server.sendContent(F("<h1>XILINX JTAG Configurator and Uploader</h1><h3>by KeyboardPartner 7/2026, V. "));
     server.sendContent(versionString);
     server.sendContent(F("</h3>"));
@@ -860,7 +866,7 @@ void handleRoot() {
   server.sendContent(F("</form>"));
   server.sendContent(F("</div>"));
 
-  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6) 
+  #if defined(GODIL_SPI) || defined(JTAG_XILINX) 
     server.sendContent(F("<h3>Dump Emulation RAM</h3>"));
     server.sendContent(F("<form method='POST' action='/dump-eprom'>"));
     server.sendContent(F("<table style='width:100%;border-collapse:collapse;margin:6px 0'><tr>"));
@@ -918,7 +924,7 @@ void handleRoot() {
   server.sendContent(F("</code> KiB free, <code id='stFsTotal'>"));
   server.sendContent(String(fsTotalKiB));
   server.sendContent(F("</code> KiB total</li>"));
-  #ifdef JTAG_SPARTAN6
+  #ifdef JTAG_XILINX
     server.sendContent(F("<li>FPGA Configuration: <code>"));
     server.sendContent(startupFpgaPath);
     server.sendContent(F("</code></li>"));
@@ -1153,6 +1159,40 @@ void handleSettingsData() {
   server.send(200, "application/json", json);
 }
 
+void updatePortValuesFromRequest() {
+  port0value = 0;
+  port1value = 0;
+  for (uint8_t bit = 0; bit < 8; ++bit) {
+    if (server.hasArg(String(F("port0_bit_")) + bit)) {
+      port0value |= static_cast<uint8_t>(1U << bit);
+    }
+    if (server.hasArg(String(F("port1_bit_")) + bit)) {
+      port1value |= static_cast<uint8_t>(1U << bit);
+    }
+  }
+}
+
+void handleResetChip() {
+  if (!fsMounted) {
+    server.sendHeader("Location", "/settings.html?err=LittleFS%20is%20not%20mounted", true);
+    server.send(303, "text/plain", "");
+    return;
+  }
+
+  updatePortValuesFromRequest();
+  if (!saveGlobalSettings()) {
+    server.sendHeader("Location", "/settings.html?err=Failed%20to%20save%20.settings.ini", true);
+    server.send(303, "text/plain", "");
+    return;
+  }
+
+  #if defined(GODIL_SPI) || defined(JTAG_XILINX)
+    resetChip();
+  #endif
+  server.sendHeader("Location", "/settings.html?reset=1", true);
+  server.send(303, "text/plain", "");
+}
+
 void handleSaveSettings() {
   if (!fsMounted) {
     server.sendHeader("Location", "/settings.html?err=LittleFS%20is%20not%20mounted", true);
@@ -1189,16 +1229,7 @@ void handleSaveSettings() {
   startupFpgaPath = requestedStartupPath;
   staSsid = requestedStaSsid;
   staPassword = requestedStaPassword;
-  port0value = 0;
-  port1value = 0;
-  for (uint8_t bit = 0; bit < 8; ++bit) {
-    if (server.hasArg(String(F("port0_bit_")) + bit)) {
-      port0value |= static_cast<uint8_t>(1U << bit);
-    }
-    if (server.hasArg(String(F("port1_bit_")) + bit)) {
-      port1value |= static_cast<uint8_t>(1U << bit);
-    }
-  }
+  updatePortValuesFromRequest();
   outputPort(0, port0value);
   outputPort(1, port1value);
 
@@ -1224,7 +1255,7 @@ void handleEraseEprom() {
 }
 
 void handleDumpEprom() {
-#if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+#if defined(GODIL_SPI) || defined(JTAG_XILINX)
   if (!fsMounted) {
     pendingMessage = F("Cannot dump: LittleFS is not mounted.");
     redirectToRoot();
@@ -1558,7 +1589,7 @@ void serverInit() {
       digitalWrite(LED_BUILTIN, LOW);
       delay(100);
     }
-    #ifndef JTAG_SPARTAN6
+    #ifndef JTAG_XILINX
       digitalWrite(LED_SENDDATA, LOW);
     #endif
     drawMsgBox(F("Warning:"), F("AP mode"), DB_ERROR, 1000);
@@ -1583,6 +1614,7 @@ void serverInit() {
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/settings-data", HTTP_GET, handleSettingsData);
   server.on("/save-settings", HTTP_POST, handleSaveSettings);
+  server.on("/reset-chip", HTTP_POST, handleResetChip);
   server.on("/download-file", HTTP_GET, handleDownloadFile);
   server.on("/set-chip-type", HTTP_POST, handleSetChipType);
   server.on("/set-autoplay", HTTP_POST, handleSetAutoplay);

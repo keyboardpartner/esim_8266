@@ -48,6 +48,7 @@
 
       <div class="upload-actions-row" style="margin-top:8px; padding-top:12px">
         <button type="submit" form="settingsForm">Save Defaults</button>
+        <button type="submit" form="settingsForm" formaction="/reset-chip">Reset</button>
         <form method="POST" action="/reset-settings"
           onsubmit="return confirm('Clear saved defaults?');">
           <button type="submit" style="background:#ef4444;color:#ffffff">Clear
@@ -66,6 +67,7 @@
       const q = new URLSearchParams(location.search);
       const err = q.get('err');
       const saved = q.get('saved');
+      const reset = q.get('reset');
 
       document.querySelectorAll('.port-bit-row').forEach((row) => {
         const port = row.dataset.port;
@@ -89,6 +91,10 @@
         msgEl.style.display = 'block';
       } else if (saved === '1') {
         msgEl.textContent = 'Defaults saved.';
+        msgEl.className = 'msg ok';
+        msgEl.style.display = 'block';
+      } else if (reset === '1') {
+        msgEl.textContent = 'Chip reset.';
         msgEl.className = 'msg ok';
         msgEl.style.display = 'block';
       }

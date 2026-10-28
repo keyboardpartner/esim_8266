@@ -32,7 +32,7 @@
 #include <Arduino.h>
 
 void printIDcode() {
-  #ifdef JTAG_SPARTAN6
+  #ifdef JTAG_XILINX
     Serial.println("");
     printCenteredSerial(F("FPGA Info"));
     jtagCheckIDcode();
@@ -139,7 +139,7 @@ void printWebInfo() {
 // SERIAL COMMAND HELPER FUNCTIONS
 // ##############################################################################
                                                           
-#if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+#if defined(GODIL_SPI) || defined(JTAG_XILINX)
 void hexdumpInputBytes256(uint32_t startAddr) {
   // Hex dump 256 bytes from device starting at startAddr.
   startBlockTransfer(startAddr);
@@ -167,11 +167,11 @@ void hexdumpInputBytes256(uint32_t startAddr) {
 void printSerialCommandsInfo() {
   Serial.println("");
   printCenteredSerial(F("Serial Commands"));
-  #ifdef JTAG_SPARTAN6
+  #ifdef JTAG_XILINX
     Serial.println(F("c: Configurate FPGA with last/staged .bit file"));
     Serial.println(F("o: List chip types and select emulation mode"));
   #endif
-  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+  #if defined(GODIL_SPI) || defined(JTAG_XILINX)
     Serial.println(F("d<start><CR>: Hexdump of 256 bytes from device"));
     Serial.println(F("j<filename,start,len><CR>: dump EPROM to file"));
   #endif
@@ -504,13 +504,19 @@ void processSerialCommands() {
   String optionString;
   String filename;
   String wifiValue;
-  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+  #if defined(GODIL_SPI) || defined(JTAG_XILINX)
     static uint32_t startAddr = 0;
     uint16_t len = 0;
   #endif
   while (Serial.available() > 0) {
     const char cmd = static_cast<char>(Serial.read());
     switch (cmd) {
+      case 'q':
+      case 'Q':
+      // Quit command, reset ESP8266
+        Serial.println(F("Quitting and restarting..."));
+        ESP.restart();  // Reset ESP8266
+        break;
       case 'a':
       case 'A':
         Serial.print(F("\rStart address (dec/0x): "));
@@ -526,10 +532,10 @@ void processSerialCommands() {
         Serial.print(F("Start address set to 0x"));
         Serial.println(lastUploadStartAddr, HEX);
         break;
-      #ifdef JTAG_SPARTAN6
+      #ifdef JTAG_XILINX
         case 'c':
         case 'C':
-          // config SPARTAN 6 FPGA via JTAG (only available in JTAG_SPARTAN6 mode)
+          // config XILINX FPGA via JTAG (only available in JTAG_XILINX mode)
           Serial.write('\r');
           dy1message(F("cfg"));
           drawStringBox("FPGA Cfg", startupFpgaPath, 0);
@@ -553,7 +559,7 @@ void processSerialCommands() {
         break;
       case 'd':
       case 'D':
-        #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+        #if defined(GODIL_SPI) || defined(JTAG_XILINX)
           Serial.print(F("\rDump from addr: "));
           if (!readSerialLine(optionString, kSerialUploadTimeoutMs * 25U)) {
             Serial.println(F("\rERROR: timeout while reading hexdump start address."));
@@ -573,7 +579,7 @@ void processSerialCommands() {
         break;
       case 'o':
       case 'O':
-        #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+        #if defined(GODIL_SPI) || defined(JTAG_XILINX)
           // List chip types and prompt for selection (only available in FPGA mode)
           Serial.println(F("\rAvailable chip types:"));
           for (uint32_t i = 0; i < kChipTypeCount; ++i) {
@@ -615,7 +621,7 @@ void processSerialCommands() {
         break;
       case 'h':
       case 'H':
-        #ifdef JTAG_SPARTAN6
+        #ifdef JTAG_XILINX
           printIDcode();
         #endif
         printWebInfo();
@@ -684,7 +690,7 @@ void processSerialCommands() {
         break;
       case 'j':
       case 'J':
-        #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+        #if defined(GODIL_SPI) || defined(JTAG_XILINX)
           if (!readSerialLine(dumpLine, kSerialUploadTimeoutMs * 25U)) {
             Serial.write(kSerialNakByte);
             Serial.println(F("\rERROR: timeout while reading dump arguments."));

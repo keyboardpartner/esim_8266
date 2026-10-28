@@ -5,6 +5,7 @@
 
 // Uncomment or define STA_MODE to connect to an existing Wi-Fi network instead of starting an access point.
 #define STA_MODE
+// #define USE_TIMEDATE
 
 // uncomment to use Web Server
 #define USE_WEB_SERVER
@@ -44,6 +45,16 @@
 
 #endif
 
+#ifdef USE_TIMEDATE
+  // Define NTP Client to get time
+  WiFiUDP ntpUDP;
+  NTPClient timeClient(ntpUDP, "pool.ntp.org");
+#endif
+
+//Week Days
+String weekDays[7]={"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+//Month names
+String months[12]={"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 
 // Uncomment to enable verbose serial debug output.
 // #define DEBUG
@@ -59,8 +70,8 @@
 // uncomment to use old PEPS EPROM simulator from Hans Lotter, Conitec
 // #define PEPS_SPI
 
-// uncomment to use MOJO board with Spartan XC6SLX9 
-#define JTAG_SPARTAN6
+// uncomment to use board with XILINX FPGAs
+#define JTAG_XILINX
 
 constexpr const char *versionString = "0.92";
 
@@ -132,7 +143,7 @@ void printCenteredSerial(const String &text, char padChar = '-') {
   constexpr const char *kApSsid = "PEPS Uploader";
  #endif
 
-#ifdef JTAG_SPARTAN6
+#ifdef JTAG_XILINX
   #define LATCH_PIN 15 // FPGA SPI /SS
   #include "jtag_send.h"
   constexpr const char *kApSsid = "FPGA Uploader";

@@ -28,7 +28,7 @@ bool startPlaybackFromStaging(uint32_t startAddr, const String &filePath) {
     return false;
   }
   uint32_t start_time = millis();
-  #ifdef JTAG_SPARTAN6
+  #ifdef JTAG_XILINX
      if (isBitstreamFilePath(filePath)) {
       lastUploadStartAddr = 0;
       lastStreamedStartAddr = 0;

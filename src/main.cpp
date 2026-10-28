@@ -50,13 +50,14 @@
 #include <Arduino.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 #include <LittleFS.h>
 #include <SPI.h>
 #include <cstdlib>
 #include <cstdio>
 #include "global_vars.h" // for #defines
 #include "jtag_send.h"
-
 // Display helpers are extracted to a dedicated header.
 #include "dy1_display.h"
 
@@ -122,12 +123,12 @@ void setup() {
   digitalWrite(LED_BUILTIN, LOW);
   delay(200);
   
-  #ifndef JTAG_SPARTAN6
+  #ifndef JTAG_XILINX
     pinMode(LED_SENDDATA, OUTPUT);
     digitalWrite(LED_SENDDATA, LOW);
   #endif
 
-  #ifdef JTAG_SPARTAN6
+  #ifdef JTAG_XILINX
     pinMode(LATCH_PIN, OUTPUT);
     digitalWrite(LATCH_PIN, HIGH);
     Serial.print(F("FPGA Binary Uploader by Carsten Meyer 7/2026 V. "));
@@ -229,7 +230,7 @@ void setup() {
     getFPGAversion();
   #endif
 
-  #ifdef JTAG_SPARTAN6
+  #ifdef JTAG_XILINX
     if (fsMounted) {
       if (LittleFS.exists(startupFpgaPath) && isBitstreamFilePath(startupFpgaPath)) {
         drawStringBox(F("FPGA Config"), startupFpgaPath);
@@ -252,7 +253,7 @@ void setup() {
     startPlaybackFromStaging(resolveStartAddressForPath(currentFilePath), currentFilePath);
   }
 
-  #if defined(GODIL_SPI) || defined(JTAG_SPARTAN6)
+  #if defined(GODIL_SPI) || defined(JTAG_XILINX)
     outputChipType(currentChipTypeIndex);
     outputPort(0, port0value); // set all outputs
     outputPort(1, port1value); // set all outputs
@@ -284,7 +285,18 @@ void setup() {
     #endif
     if (currentWifiMode == WifiMode_STA) {
       drawStringBox(F("STA Mode"), WiFi.localIP().toString());
-    } else {
+      #ifdef USE_TIMEDATE
+        timeClient.begin();
+        // Set offset time in seconds to adjust for your timezone, for example:
+        // GMT +1 = 3600
+        // GMT +1 = 7200
+        // GMT +8 = 28800
+        // GMT -1 = -3600
+        // GMT 0 = 0
+        timeClient.setTimeOffset(7200); // Adjust for your timezone
+      #endif
+    }
+    else {
       drawStringBox(F("AP Mode"), WiFi.softAPIP().toString());
     }
     printWebInfo();
@@ -298,12 +310,23 @@ void setup() {
   // printSerialCommandsInfo();
   delay(1000);
   readyMessage();
+  #ifdef USE_TIMEDATE
+    if (currentWifiMode == WifiMode_STA) {
+      timeClient.update();
+      String formattedTime = timeClient.getFormattedTime();
+      Serial.print("Formatted Time: ");
+      Serial.println(formattedTime);  
+    }
+  #endif  
   Serial.println(F("\nReady."));
 }
 
   
 // Main service loop for serial commands, HTTP handling, and playback.
 void loop() {
+  #ifdef USE_TIMEDATE
+  if (currentWifiMode == WifiMode_STA) timeClient.update();
+  #endif
   processSerialCommands();
   #ifdef USE_WEB_SERVER
     server.handleClient();
